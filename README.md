@@ -1,16 +1,16 @@
 <div align="center">
 
-# WIKIDASH
+# RABBIT HOLE
 
 ### The Wikipedia Speedrun Game
 
 **One starting article. One destination. How fast can you get there?**
 
-[![Play WikiDash](https://img.shields.io/badge/PLAY-WIKIDASH-3366cc?style=for-the-badge)](https://mochaslatte.github.io/wikidash/)
-[![GitHub Pages](https://img.shields.io/badge/Hosted_on-GitHub_Pages-222222?style=for-the-badge&logo=github)](https://mochaslatte.github.io/wikidash/)
+[![Play Rabbit-hole](https://img.shields.io/badge/PLAY-Rabbit-hole-3366cc?style=for-the-badge)](https://mochaslatte.github.io/Rabbit-hole/)
+[![GitHub Pages](https://img.shields.io/badge/Hosted_on-GitHub_Pages-222222?style=for-the-badge&logo=github)](https://mochaslatte.github.io/Rabbit-hole/)
 [![Vanilla JavaScript](https://img.shields.io/badge/Built_with-Vanilla_JavaScript-315ea8?style=for-the-badge)](#tech-stack)
 
-[Play the game](https://mochaslatte.github.io/wikidash/) · [How to play](#how-to-play) · [Features](#features) · [Credits](#credits)
+[Play the game](https://mochaslatte.github.io/Rabbit-hole/) · [How to play](#how-to-play) · [Features](#features) · [Credits](#credits)
 
 ---
 
@@ -18,7 +18,7 @@
 
 ## ABOUT
 
-**WikiDash** is a browser-based Wikipedia speedrunning game. Start on one Wikipedia article and navigate to a target article using only the links inside the articles. Try to finish with the **fewest clicks** and the **fastest time**.
+**Rabbit-hole** is a browser-based Wikipedia speedrunning game. Start on one Wikipedia article and navigate to a target article using only the links inside the articles. Try to finish with the **fewest clicks** and the **fastest time**.
 
 No installation is needed to play: open the site in your browser and start a run.
 
@@ -49,7 +49,7 @@ No installation is needed to play: open the site in your browser and start a run
 ## PROJECT STRUCTURE
 
 ```text
-wikidash/
+Rabbit-hole/
 ├── index.html           # Main page
 ├── README.md            # Project documentation
 ├── LICENSE              # License information, if included
@@ -97,18 +97,18 @@ Then open `http://localhost:8000` in your browser.
 
 Original game concept, design, and development.
 
-WikiDash uses content from **Wikipedia**, available under the applicable Creative Commons Attribution-ShareAlike terms, and **PeerJS** for multiplayer connectivity. WikiDash is an independent project and is not affiliated with or endorsed by the Wikimedia Foundation.
+Rabbit-hole uses content from **Wikipedia**, available under the applicable Creative Commons Attribution-ShareAlike terms, and **PeerJS** for multiplayer connectivity. Rabbit-hole is an independent project and is not affiliated with or endorsed by the Wikimedia Foundation.
 
 ## LINKS
 
-**Play:** https://mochaslatte.github.io/wikidash/  
-**Source:** https://github.com/Mochaslatte/wikidash
+**Play:** https://mochaslatte.github.io/Rabbit-hole/  
+**Source:** https://github.com/Mochaslatte/Rabbit-hole
 
 ---
 
 <div align="center">
 
-**WIKIDASH**  
+**Rabbit-hole**  
 *Find the link. Beat the clock.*
 
 </div>
