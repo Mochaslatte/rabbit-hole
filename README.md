@@ -90,7 +90,5 @@ WikiDash uses content from **Wikipedia**, available under the applicable Creativ
 
 <div align="center">
 
-**WIKIDASH**  
-*Find the link. Beat the clock.*
 
 </div>
