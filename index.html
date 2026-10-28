@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WikiDash – the Wikipedia speedrun game</title>
+<link rel="icon" type="image/png" href="./favicon.png">
 <style>
 :root{
   --bg:#f6f6f6; --paper:#fff; --text:#202122; --muted:#54595d; --border:#a2a9b1; --soft:#eaecf0;
@@ -133,6 +134,9 @@ main{background:var(--paper);border:1px solid var(--border);border-top:0;min-hei
 :root[data-theme="dark"] .content [style*="background"]{background-color:var(--box)!important}
 :root[data-theme="dark"] .content [style*="color"]{color:var(--text)!important}
 @media(max-width:760px){.top{flex-wrap:wrap;gap:5px 10px}.theme-control{margin-left:0;width:100%;justify-content:flex-end}}
+.site-credits{margin-top:28px;padding-top:12px;border-top:1px solid var(--soft);font-size:12px;color:var(--muted)}
+.site-credits summary{cursor:pointer;font-weight:600}
+.site-credits p{margin:8px 0}
 </style>
 </head>
 <body>
@@ -214,6 +218,13 @@ main{background:var(--paper);border:1px solid var(--border);border-top:0;min-hei
       <div class="artwrap"><div id="article"></div></div>
       <p style="color:var(--muted);font-size:12px;margin-top:30px;border-top:1px solid var(--soft);padding-top:8px">Text from <a href="https://www.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a>, available under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>.</p>
     </section>
+    <footer class="site-credits" aria-label="Credits">
+      <details>
+        <summary>Credits &amp; acknowledgments</summary>
+        <p>WikiDash is an independent Wikipedia navigation speedrun game. Article content is provided by <a href="https://www.wikipedia.org/" target="_blank" rel="noopener">Wikipedia</a> and its volunteer contributors, under applicable <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">Creative Commons Attribution-ShareAlike</a> terms. Wikipedia and its logo are trademarks of the Wikimedia Foundation; WikiDash is not affiliated with or endorsed by Wikimedia.</p>
+        <p>Multiplayer connectivity uses <a href="https://peerjs.com/" target="_blank" rel="noopener">PeerJS</a>. Retro lightning-globe favicon created for WikiDash with AI assistance.</p>
+      </details>
+    </footer>
   </main>
 </div>
 
