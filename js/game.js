@@ -1,4 +1,3 @@
-// WikiDash game, Wikipedia API, peer-to-peer parties, and route solver.
 (function(){
   var API = "https://en.wikipedia.org/w/api.php";
   var POOL = ["Pizza","Albert Einstein","Moon","Ancient Rome","Association football","Guitar","Volcano","Chocolate","Titanic","Cat","Mount Everest","Electricity","Leonardo da Vinci","Coffee","Jazz","Dinosaur","Great Pyramid of Giza","Japan","Bicycle","Great white shark","Bitcoin","Napoleon","Oxygen","Olympic Games","Vampire","Pacific Ocean","Telescope","William Shakespeare","Hamburger","Sahara","Penguin","Internet","World War II","Basketball","Chess","Rainbow","Sushi","Solar System","Wolfgang Amadeus Mozart","Amazon River","Honey","Tornado","Elephant","Brazil","Vincent van Gogh","Lightning","Bread"];
@@ -21,8 +20,8 @@
     var q = Object.keys(params).map(function(k){ return k+"="+encodeURIComponent(params[k]); }).join("&");
     return fetch(API+"?"+q+"&format=json&formatversion=2&origin=*").then(function(r){ return r.json(); });
   }
-  function key(){ return "wikidash:" + norm(from) + ">" + norm(to); }
-  function getBest(f,t){ try { var v = localStorage.getItem("wikidash:"+norm(f)+">"+norm(t)); return v?JSON.parse(v):null; } catch(e){ return null; } }
+  function key(){ return "rabbit-hole:" + norm(from) + ">" + norm(to); }
+  function getBest(f,t){ try { var v = localStorage.getItem("rabbit-hole:"+norm(f)+">"+norm(t)); return v?JSON.parse(v):null; } catch(e){ return null; } }
   function setBest(o){ try { localStorage.setItem(key(), JSON.stringify(o)); } catch(e){} }
   function setErr(m){ $("err").textContent = m || ""; }
 
@@ -254,7 +253,7 @@
   $("quitBtn").onclick = giveUp;
   $("againBtn").onclick = home;
   $("shareBtn").onclick = function(){
-    copy("WikiDash: " + from + " → " + to + " in " + $("winTime").textContent + " with " + clicks + " clicks.\nPath: " + path.map(function(p){return p.title;}).join(" > "), $("shareBtn"), "Copy result");
+    copy("Rabbit Hole: " + from + " → " + to + " in " + $("winTime").textContent + " with " + clicks + " clicks.\nPath: " + path.map(function(p){return p.title;}).join(" > "), $("shareBtn"), "Copy result");
   };
   $("linkBtn").onclick = function(){
     var u = location.origin + location.pathname + "?from=" + encodeURIComponent(from) + "&to=" + encodeURIComponent(to);
@@ -334,7 +333,7 @@
   function createParty(tries){
     if(typeof Peer === "undefined"){ setPartyMsg("Party mode could not load. Check your connection and refresh."); return; }
     var c = newCode(), name = myName();
-    var peer = new Peer("wikidash-" + c);
+    var peer = new Peer("rabbit-hole-" + c);
     var p = party = {isHost:true, code:c, peer:peer, conns:{}, players:{}, me:null};
     setPartyMsg("Creating party…");
     peer.on("open", function(id){
@@ -371,7 +370,7 @@
     var tmo = setTimeout(function(){ if(!opened && party===p){ setPartyMsg("Could not reach that party."); leaveParty(true); } }, 12000);
     peer.on("open", function(id){
       p.me = id;
-      var conn = p.hostConn = peer.connect("wikidash-" + c, {reliable:true});
+      var conn = p.hostConn = peer.connect("rabbit-hole-" + c, {reliable:true});
       conn.on("open", function(){ opened = true; clearTimeout(tmo); setPartyMsg(""); conn.send({t:"join", name:name}); renderLobby(); });
       conn.on("data", function(m){
         if(m.t==="players"){ p.players = {}; m.list.forEach(function(x){ p.players[x.id] = x; }); renderLobby(); renderBoard(); }
