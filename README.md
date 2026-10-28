@@ -1,94 +1,49 @@
-<div align="center">
+# Rabbit Hole
 
-# WIKIDASH
-
-### The Wikipedia Speedrun Game
-
-**One starting article. One destination. How fast can you get there?**
-
-[![Play WikiDash](https://img.shields.io/badge/PLAY-WIKIDASH-3366cc?style=for-the-badge)](https://mochaslatte.github.io/wikidash/)
-[![GitHub Pages](https://img.shields.io/badge/Hosted_on-GitHub_Pages-222222?style=for-the-badge&logo=github)](https://mochaslatte.github.io/wikidash/)
-[![Vanilla JavaScript](https://img.shields.io/badge/Built_with-Vanilla_JavaScript-315ea8?style=for-the-badge)](#tech-stack)
-
-[Play the game](https://mochaslatte.github.io/wikidash/) · [How to play](#how-to-play) · [Features](#features) · [Credits](#credits)
-
----
-
-</div>
-
-## ABOUT
-
-**WikiDash** is a browser-based Wikipedia speedrunning game. Start on one Wikipedia article and navigate to a target article using only the links inside the articles. Try to finish with the **fewest clicks** and the **fastest time**.
-
-No installation is needed to play: open the site in your browser and start a run.
-
-## HOW TO PLAY
-
-1. Enter a **start article** and a **target article**, or choose **Random route**.
-2. Select **Start the clock**.
-3. Navigate by clicking the available links within Wikipedia articles.
-4. Reach the target and compare your time and number of clicks.
-5. Challenge friends to try the same route.
-
-> **Tip:** The game timer pauses while articles load, so the run measures navigation time rather than network delays.
-
-## FEATURES
-
-| Feature | Description |
-| :-- | :-- |
-| Wikipedia navigation | Move between real Wikipedia articles through in-article links. |
-| Speedrun timer | Track completion time with centisecond display. |
-| Click counter and log | See how many links you've followed and the route you've taken. |
-| Random routes | Generate a new start and target from a curated pool. |
-| Personal bests | Save your best time for each route in your browser. |
-| Multiplayer parties | Create or join peer-to-peer parties to race friends. |
-| Challenge links | Share the same start and target with someone else. |
-| Route finder | After a run, search for a short route between articles. |
-| Appearance settings | Choose a light or dark interface, where supported by the current build. |
-
-## RUN LOCALLY
-
-This is a static web project. To view it locally:
-
-1. Download or clone the repository.
-2. Keep the folders and filenames in the structure shown above.
-3. Open `index.html` in a browser, or serve the folder with a local web server.
-
-For example, with Python installed:
-
-```bash
-python3 -m http.server 8000
-```
-
-Then open `http://localhost:8000` in your browser.
-
-> An internet connection is required for Wikipedia content and the external service used by multiplayer parties.
-
-## TECH STACK
-
-- **HTML5** — page structure
-- **CSS3** — styling and responsive layout
-- **JavaScript** — gameplay, navigation, and browser storage
-- **Wikipedia / MediaWiki API** — article search and content
-- **PeerJS** — peer-to-peer multiplayer connections
-- **GitHub Pages** — static site hosting
-
-## CREDITS
+A Wikipedia speedrunning browser game. Race from one article to another using only links inside Wikipedia articles.
 
 **Created and primarily coded by [Mochaslatte](https://github.com/Mochaslatte).**
 
-Original game concept, design, and development.
+## Play
 
-WikiDash uses content from **Wikipedia**, available under the applicable Creative Commons Attribution-ShareAlike terms, and **PeerJS** for multiplayer connectivity. WikiDash is an independent project and is not affiliated with or endorsed by the Wikimedia Foundation.
+[Play Rabbit Hole](https://mochaslatte.github.io/wikidash/)
 
-## LINKS
+## Features
 
-**Play:** https://mochaslatte.github.io/wikidash/  
-**Source:** https://github.com/Mochaslatte/wikidash
+- Choose a start and target article, or generate a random route.
+- Track elapsed time, clicks, and personal bests.
+- Challenge friends with shareable routes and peer-to-peer party races.
+- Request a suggested short route after finishing or giving up.
+- Switch between light, dark, and system appearance.
 
----
+## Project structure
 
-<div align="center">
+```text
+index.html          Page structure
+css/style.css       Layout and component styling
+css/themes.css      Appearance themes
+js/settings.js      Theme preference handling
+js/game.js          Game logic, Wikipedia integration, multiplayer, route solver
+assets/favicon.png  Pixel-art icon
+```
 
+## Development
 
-</div>
+Open `index.html` in a browser, or run a local static server (for example `python -m http.server 8000`) and visit the local address. An internet connection is needed for Wikipedia and PeerJS.
+
+## Publishing updates
+
+Upload **the contents of this folder** (not the outer folder itself) to the root of your GitHub repository. In **Settings → Pages**, deploy from the `main` branch and `/ (root)`. Keep the relative paths unchanged.
+
+## Credits
+
+- Created and primarily coded by **Mochaslatte**.
+- Wikipedia article content from Wikipedia contributors; article text is available under applicable [CC BY-SA](https://creativecommons.org/licenses/by-sa/4.0/) terms.
+- Multiplayer uses [PeerJS](https://peerjs.com/).
+- New favicon designed with AI assistance.
+
+Rabbit Hole is independent and not affiliated with or endorsed by Wikimedia.
+
+## License
+
+See [LICENSE](LICENSE) for the project's source-code license. Wikipedia article content and third-party dependencies retain their own licenses.
