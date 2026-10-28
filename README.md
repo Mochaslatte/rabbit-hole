@@ -6,7 +6,7 @@
 
 **One starting article. One destination. How fast can you get there?**
 
-[![Play Rabbit-hole](https://img.shields.io/badge/PLAY-Rabbit-hole-3366cc?style=for-the-badge)](https://mochaslatte.github.io/rabbit-hole/)
+[![Play Rabbit-hole](https://img.shields.io/badge/PLAY-rabbit-hole-3366cc?style=for-the-badge)](https://mochaslatte.github.io/rabbit-hole/)
 [![GitHub Pages](https://img.shields.io/badge/Hosted_on-GitHub_Pages-222222?style=for-the-badge&logo=github)](https://mochaslatte.github.io/rabbit-hole/)
 [![Vanilla JavaScript](https://img.shields.io/badge/Built_with-Vanilla_JavaScript-315ea8?style=for-the-badge)](#tech-stack)
 
