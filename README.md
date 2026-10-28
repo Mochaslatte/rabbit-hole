@@ -1,4 +1,4 @@
-# Rabbit Hole
+# WikiDash 
 
 A Wikipedia speedrunning browser game. Race from one article to another using only links inside Wikipedia articles.
 
@@ -6,7 +6,7 @@ A Wikipedia speedrunning browser game. Race from one article to another using on
 
 ## Play
 
-[Play Rabbit Hole](https://mochaslatte.github.io/wikidash/)
+[Play WikiDash](https://mochaslatte.github.io/wikidash/)
 
 ## Features
 
@@ -42,7 +42,7 @@ Upload **the contents of this folder** (not the outer folder itself) to the root
 - Multiplayer uses [PeerJS](https://peerjs.com/).
 - New favicon designed with AI assistance.
 
-Rabbit Hole is independent and not affiliated with or endorsed by Wikimedia.
+WikiDash is independent and not affiliated with or endorsed by Wikimedia.
 
 ## License
 
