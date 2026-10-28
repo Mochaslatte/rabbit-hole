@@ -10,7 +10,7 @@
 [![GitHub Pages](https://img.shields.io/badge/Hosted_on-GitHub_Pages-222222?style=for-the-badge&logo=github)](https://mochaslatte.github.io/Rabbit-hole/)
 [![Vanilla JavaScript](https://img.shields.io/badge/Built_with-Vanilla_JavaScript-315ea8?style=for-the-badge)](#tech-stack)
 
-[Play the game](https://mochaslatte.github.io/Rabbit-hole/) · [How to play](#how-to-play) · [Features](#features) · [Credits](#credits)
+[Play the game](https://mochaslatte.github.io/rabbit-hole/) · [How to play](#how-to-play) · [Features](#features) · [Credits](#credits)
 
 ---
 
@@ -46,23 +46,6 @@ No installation is needed to play: open the site in your browser and start a run
 | Route finder | After a run, search for a short route between articles. |
 | Appearance settings | Choose a light or dark interface, where supported by the current build. |
 
-## PROJECT STRUCTURE
-
-```text
-Rabbit-hole/
-├── index.html           # Main page
-├── README.md            # Project documentation
-├── LICENSE              # License information, if included
-├── assets/
-│   ├── favicon.png      # Site icon
-│   └── favicon-32.png   # Small site icon
-├── css/
-│   ├── style.css        # Layout and components
-│   └── themes.css       # Appearance themes
-└── js/
-    ├── game.js          # Gameplay and related logic
-    └── settings.js      # Theme preferences
-```
 
 ## RUN LOCALLY
 
@@ -101,14 +84,12 @@ Rabbit-hole uses content from **Wikipedia**, available under the applicable Crea
 
 ## LINKS
 
-**Play:** https://mochaslatte.github.io/Rabbit-hole/  
-**Source:** https://github.com/Mochaslatte/Rabbit-hole
+**Play:** https://mochaslatte.github.io/rabbit-hole/  
+**Source:** https://github.com/Mochaslatte/rabbit-hole
 
 ---
 
 <div align="center">
 
-**Rabbit-hole**  
-*Find the link. Beat the clock.*
 
 </div>
