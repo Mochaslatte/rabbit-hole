@@ -46,24 +46,6 @@ No installation is needed to play: open the site in your browser and start a run
 | Route finder | After a run, search for a short route between articles. |
 | Appearance settings | Choose a light or dark interface, where supported by the current build. |
 
-## PROJECT STRUCTURE
-
-```text
-wikidash/
-├── index.html           # Main page
-├── README.md            # Project documentation
-├── LICENSE              # License information, if included
-├── assets/
-│   ├── favicon.png      # Site icon
-│   └── favicon-32.png   # Small site icon
-├── css/
-│   ├── style.css        # Layout and components
-│   └── themes.css       # Appearance themes
-└── js/
-    ├── game.js          # Gameplay and related logic
-    └── settings.js      # Theme preferences
-```
-
 ## RUN LOCALLY
 
 This is a static web project. To view it locally:
