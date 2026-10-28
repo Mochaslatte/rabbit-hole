@@ -13,7 +13,7 @@
     return m + ":" + (s<10?"0":"") + s + "." + (cs<10?"0":"") + cs;
   }
   function elapsed(){ return acc + (running ? performance.now() - last : 0); }
-  function tick(){ $("timer").textContent = fmt(elapsed()); limitTick(); if(!ended) raf = requestAnimationFrame(tick); }
+  function tick(){ $("timer").textContent = fmt(elapsed()); raf = requestAnimationFrame(tick); }
   function startClock(){ if(!running){ last = performance.now(); running = true; } }
   function stopClock(){ if(running){ acc += performance.now() - last; running = false; } }
   function api(params){
@@ -97,7 +97,6 @@
       if(norm(r[0]) === norm(r[1])){ setErr("Start and target must be different articles."); return; }
       setErr("");
       from = r[0]; to = r[1];
-      curMode = $("modeSel").value;
       if(party && party.isHost) hostStart();
       startRun();
     }).catch(function(){
@@ -117,7 +116,6 @@
     $("win").classList.add("hidden");
     document.documentElement.style.setProperty("--barh", $("gbar").offsetHeight + "px");
     $("solve").classList.add("hidden");
-    resetExtras();
     renderLog(); renderBoard();
     cancelAnimationFrame(raf); tick();
     load(from, true);
@@ -133,17 +131,16 @@
     api({action:"parse", page:title, redirects:1, prop:"text", disableeditsection:1}).then(function(d){
       if(!d.parse) throw new Error("missing");
       var real = d.parse.title;
-      path.push({title:real, ms:elapsed()}); trackStack(real);
+      path.push({title:real, ms:elapsed()});
       render(real, d.parse.text);
       ov.remove(); busy = false;
       renderLog();
       if(!isStart && norm(real) === norm(to)){ finish(); return; }
       sendProg();
-      if(limitHit()) return;
       startClock();
       window.scrollTo(0,0);
     }).catch(function(){
-      busy = false; goingBack = false;
+      busy = false;
       if(!isStart){ clicks--; $("clicks").textContent = clicks; }
       ov.textContent = "Could not load that page. Click here to dismiss and try again.";
       ov.style.cursor = "pointer";
@@ -199,7 +196,7 @@
       var ms = document.createElement("span"); ms.className = "ms"; ms.textContent = fmt(p.ms);
       li.appendChild(n); li.appendChild(t); li.appendChild(ms); ol.appendChild(li);
     });
-    ol.scrollTop = ol.scrollHeight; syncBack();
+    ol.scrollTop = ol.scrollHeight;
   }
 
   function onNav(e){
@@ -229,7 +226,6 @@
     var b = getBest(from,to), nb = !b || ms < b.ms;
     if(nb) setBest({ms:Math.round(ms), clicks:clicks});
     $("pb").classList.toggle("hidden", !nb);
-    onWin(ms);
     $("win").classList.remove("hidden");
     $("againBtn").focus(); renderBoard();
   }
@@ -293,7 +289,7 @@
       var li = document.createElement("li"), n = document.createElement("span"), c = document.createElement("span"), s = document.createElement("span");
       n.className = "t"; n.textContent = p.name + (p.host ? " (host)" : "") + (party && p.id===party.me ? " (you)" : "");
       c.className = "ms"; c.textContent = p.clicks + (p.clicks===1 ? " click" : " clicks");
-      s.className = "ms"; s.textContent = p.done ? "Done " + fmt(p.ms) : (p.gaveUp ? "gave up" : "racing");
+      s.className = "ms"; s.textContent = p.done ? "\u2713 " + fmt(p.ms) : (p.gaveUp ? "gave up" : "racing");
       if(p.done) li.className = "goal-hit";
       li.appendChild(n); if(withStatus){ li.appendChild(c); li.appendChild(s); } ol.appendChild(li);
     });
@@ -329,7 +325,7 @@
   }
   function hostStart(){
     Object.keys(party.players).forEach(function(k){ var q = party.players[k]; q.clicks = 0; q.done = false; q.gaveUp = false; q.ms = 0; });
-    broadcast({t:"start", from:from, to:to, mode:curMode});
+    broadcast({t:"start", from:from, to:to});
     pushPlayers();
   }
   function newCode(){ var a = "ABCDEFGHJKLMNPQRSTUVWXYZ", s = ""; for(var i=0;i<4;i++) s += a[Math.floor(Math.random()*a.length)]; return s; }
@@ -378,7 +374,7 @@
       conn.on("open", function(){ opened = true; clearTimeout(tmo); setPartyMsg(""); conn.send({t:"join", name:name}); renderLobby(); });
       conn.on("data", function(m){
         if(m.t==="players"){ p.players = {}; m.list.forEach(function(x){ p.players[x.id] = x; }); renderLobby(); renderBoard(); }
-        else if(m.t==="start"){ from = m.from; to = m.to; curMode = m.mode || "std"; startRun(); }
+        else if(m.t==="start"){ from = m.from; to = m.to; startRun(); }
       });
       conn.on("close", function(){ if(party===p){ setPartyMsg("The host left the party."); leaveParty(true); } });
     });
@@ -504,7 +500,7 @@
     $("solveStatus").textContent = "Searching Wikipedia for a route…";
     var ol = $("solveList"); ol.innerHTML = "";
     function say(m){ if(tok===solveToken) $("solveStatus").textContent = m; }
-    getPar(say).then(function(p){
+    solve(say).then(function(p){
       if(tok !== solveToken) return;
       if(!p){ say("No route of 4 clicks or fewer turned up. These articles may be far apart."); return; }
       say("A fastest route I found: " + (p.length-1) + (p.length===2 ? " click." : " clicks."));
@@ -520,7 +516,6 @@
 
   function giveUp(){
     stopClock(); cancelAnimationFrame(raf); busy = true;
-    $("solveTitle").textContent = "How you could have done it";
     sendProg(false, true);
     showSolve();
   }
@@ -529,262 +524,10 @@
   $("joinBtn").onclick = joinParty;
   $("leaveBtn").onclick = function(){ leaveParty(); };
   $("inviteBtn").onclick = function(){ if(party) copy(location.origin + location.pathname + "?party=" + party.code, $("inviteBtn"), "Copy invite link"); };
-  $("showSolveBtn").onclick = function(){ $("solveTitle").textContent = "How you could have done it"; showSolve(); };
+  $("showSolveBtn").onclick = showSolve;
   $("solveBack").onclick = home;
   renderLobby();
 
-
-  /* ---------- extras: daily route, hints, back, stats, achievements, par ---------- */
-  var LS = "rabbit-hole:", stack = [], goingBack = false, runDaily = false, hintsUsed = 0, hintMap = null, hintBusy = false, parCache = {};
-  function store(k, v){
-    try{
-      if(v === undefined){ var r = localStorage.getItem(LS + k); return r ? JSON.parse(r) : null; }
-      localStorage.setItem(LS + k, JSON.stringify(v));
-    }catch(e){ return null; }
-  }
-  function dayKey(d){ return d.getFullYear() + "-" + (d.getMonth()+1) + "-" + d.getDate(); }
-  function dailyRoute(){
-    var k = dayKey(new Date()), s = 7;
-    for(var i=0;i<k.length;i++) s = (Math.imul(s, 31) + k.charCodeAt(i)) >>> 0;
-    function r(){ s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; }
-    var a = POOL[Math.floor(r()*POOL.length)], b;
-    do { b = POOL[Math.floor(r()*POOL.length)]; } while(b === a);
-    return {key:k, from:a, to:b};
-  }
-  function streak(){
-    var done = store("daily") || [], n = 0, d = new Date();
-    if(done.indexOf(dayKey(d)) < 0) d.setDate(d.getDate() - 1);
-    while(done.indexOf(dayKey(d)) >= 0){ n++; d.setDate(d.getDate() - 1); }
-    return n;
-  }
-  function updateDaily(){
-    var d = dailyRoute(), done = (store("daily") || []).indexOf(d.key) >= 0, st = streak();
-    $("dailyLine").textContent = "Today's route: " + d.from + " to " + d.to + (done ? " (completed)" : "") + (st ? ". Daily streak: " + st + "." : "");
-  }
-
-  function trackStack(t){ if(goingBack){ stack.pop(); goingBack = false; } else stack.push(t); }
-  function syncBack(){ $("backBtn").disabled = stack.length < 2; }
-  function goBack(){ if(busy || stack.length < 2) return; goingBack = true; load(stack[stack.length-2], false); }
-
-  function resetExtras(){
-    var d = dailyRoute();
-    runDaily = $("fromIn").value.trim() === d.from && $("toIn").value.trim() === d.to && !(party && !party.isHost);
-    hintsUsed = 0; hintMap = null; hintBusy = false; stack = []; goingBack = false;
-    $("hintBtn").disabled = false; $("hintBtn").textContent = "Hint (+10s)";
-    $("targetInfo").textContent = "";
-    ended = false; var bb = getBest(from, to); $("bestNow").textContent = bb ? fmt(bb.ms) : "-";
-    var tt = to;
-    api({action:"query", prop:"extracts", exintro:1, explaintext:1, exsentences:2, redirects:1, titles:tt}).then(function(r){
-      var pg = r.query && r.query.pages && r.query.pages[0];
-      if(tt === to && pg && pg.extract) $("targetInfo").textContent = pg.extract;
-    }).catch(function(){});
-    syncBack();
-  }
-
-  // Hint: highlight links on this page that lead to an article which links straight to the target.
-  function hint(){
-    if(busy || hintBusy || !running) return;
-    hintBusy = true;
-    var btn = $("hintBtn"); btn.disabled = true; btn.textContent = "Looking…";
-    var ready = hintMap ? Promise.resolve(hintMap) : aliasesOf(to).then(function(al){
-      var A = [to].concat(al);
-      return backward(A, 4000).then(function(m){ A.forEach(function(a){ m[a] = 1; }); return m; });
-    });
-    ready.then(function(m){
-      hintMap = m;
-      var n = 0;
-      document.querySelectorAll("#article a.go").forEach(function(a){
-        if(m[a.getAttribute("data-title").replace(/_/g, " ")]){ a.classList.add("hint"); n++; }
-      });
-      if(n){ acc += 10000; hintsUsed++; }
-      btn.textContent = n ? n + (n === 1 ? " lead shown" : " leads shown") : "No leads on this page";
-      var f = document.querySelector("#article a.go.hint");
-      if(f) f.scrollIntoView({block:"center", behavior:"smooth"});
-      setTimeout(function(){ btn.textContent = "Hint (+10s)"; btn.disabled = false; hintBusy = false; }, 2200);
-    }).catch(function(){ btn.textContent = "Hint (+10s)"; btn.disabled = false; hintBusy = false; });
-  }
-
-  // Par: the shortest route length, searched once per route and cached.
-  function getPar(say){
-    var k = from + ">" + to;
-    if(!parCache[k]) parCache[k] = solve(say || function(){}).catch(function(e){ delete parCache[k]; throw e; });
-    return parCache[k];
-  }
-
-  var ACH = [
-    {id:"first", name:"First descent", desc:"Finish any route."},
-    {id:"quick", name:"Quick draw", desc:"Finish a route in under 60 seconds."},
-    {id:"straight", name:"Straight shot", desc:"Finish in 3 clicks or fewer."},
-    {id:"par", name:"On par", desc:"Match the shortest route length."},
-    {id:"clean", name:"No help needed", desc:"Finish 10 routes without using a hint."},
-    {id:"streak", name:"Three days running", desc:"Complete the daily route 3 days in a row."},
-    {id:"deep", name:"Deep in the hole", desc:"Finish 25 routes."}
-  ];
-  function unlock(id){
-    var a = store("ach") || {};
-    if(a[id]) return null;
-    a[id] = dayKey(new Date()); store("ach", a);
-    for(var i=0;i<ACH.length;i++) if(ACH[i].id === id) return ACH[i].name;
-    return null;
-  }
-  function onWin(ms){
-    var runs = store("runs") || [];
-    runs.push({f:from, t:to, ms:Math.round(ms), c:clicks, h:hintsUsed, d:Date.now()});
-    runs = runs.slice(-200); store("runs", runs);
-    if(runDaily){
-      var done = store("daily") || [], k = dayKey(new Date());
-      if(done.indexOf(k) < 0){ done.push(k); store("daily", done.slice(-400)); }
-      updateDaily();
-    }
-    var got = [];
-    [["first", true], ["quick", ms < 60000], ["straight", clicks <= 3],
-     ["clean", runs.filter(function(r){ return r.h === 0; }).length >= 10],
-     ["streak", streak() >= 3], ["deep", runs.length >= 25]].forEach(function(c){
-      if(c[1]){ var n = unlock(c[0]); if(n) got.push(n); }
-    });
-    $("winAch").textContent = got.length ? "Unlocked: " + got.join(", ") : "";
-    $("winPar").textContent = "Checking the shortest route…";
-    var f0 = from, t0 = to;
-    getPar().then(function(p){
-      if(f0 !== from || t0 !== to) return;
-      if(!p){ $("winPar").textContent = "No short route was found to compare against."; return; }
-      var par = p.length - 1;
-      $("winPar").textContent = "Par is " + par + (par === 1 ? " click. " : " clicks. ") + (clicks <= par ? "You matched par." : "You finished " + (clicks - par) + " over.");
-      if(clicks <= par){
-        var n = unlock("par");
-        if(n) $("winAch").textContent += ($("winAch").textContent ? ", " : "Unlocked: ") + n;
-      }
-    }).catch(function(){ $("winPar").textContent = ""; });
-  }
-
-  function renderStats(){
-    var runs = store("runs") || [], a = store("ach") || {}, n = runs.length;
-    function sum(f){ return runs.reduce(function(s, r){ return s + f(r); }, 0); }
-    var cells = [
-      ["Routes finished", n],
-      ["Fastest time", n ? fmt(Math.min.apply(null, runs.map(function(r){ return r.ms; }))) : "-"],
-      ["Average time", n ? fmt(sum(function(r){ return r.ms; }) / n) : "-"],
-      ["Average clicks", n ? (sum(function(r){ return r.c; }) / n).toFixed(1) : "-"],
-      ["Daily streak", streak()],
-      ["Hints used", sum(function(r){ return r.h; })]
-    ];
-    var g = $("sgrid"); g.innerHTML = "";
-    cells.forEach(function(c){
-      var d = document.createElement("div"), b = document.createElement("b");
-      d.textContent = c[0]; b.textContent = c[1]; d.appendChild(b); g.appendChild(d);
-    });
-    var ul = $("achList"); ul.innerHTML = "";
-    ACH.forEach(function(x){
-      var li = document.createElement("li"), b = document.createElement("b");
-      li.className = a[x.id] ? "on" : "locked"; b.textContent = x.name;
-      li.appendChild(b); li.appendChild(document.createTextNode(" - " + x.desc + (a[x.id] ? " Unlocked." : "")));
-      ul.appendChild(li);
-    });
-    var ol = $("runList"); ol.innerHTML = "";
-    if(!n){ var e = document.createElement("li"); e.textContent = "No finished runs yet."; ol.appendChild(e); }
-    runs.slice(-10).reverse().forEach(function(r){
-      var li = document.createElement("li"), t = document.createElement("span"), m = document.createElement("span");
-      t.className = "t"; t.textContent = r.f + " to " + r.t;
-      m.className = "ms"; m.textContent = fmt(r.ms) + ", " + r.c + (r.c === 1 ? " click" : " clicks");
-      li.appendChild(t); li.appendChild(m); ol.appendChild(li);
-    });
-    renderRecords(runs);
-    $("stats").classList.remove("hidden");
-    $("statsClose").focus();
-  }
-
-  $("hintBtn").onclick = hint;
-  $("backBtn").onclick = goBack;
-  $("statsBtn").onclick = renderStats;
-  $("statsClose").onclick = function(){ $("stats").classList.add("hidden"); };
-  $("statsClear").onclick = function(){
-    if(!confirm("Delete your run history, achievements, and daily streak?")) return;
-    try{ ["runs","ach","daily"].forEach(function(k){ localStorage.removeItem(LS + k); }); }catch(e){}
-    renderStats(); updateDaily();
-  };
-  $("dailyBtn").onclick = function(){
-    var d = dailyRoute(); $("fromIn").value = d.from; $("toIn").value = d.to; setErr(""); updateBest();
-  };
-  document.addEventListener("keydown", function(e){ if(e.key === "Escape") $("stats").classList.add("hidden"); });
-  updateDaily();
-
-  /* ---------- more: challenge modes, wild route, records, data export ---------- */
-  var curMode = "std", ended = false;
-  function modeInfo(){ var m = /^([ct])(\d+)$/.exec(curMode); return m ? {kind:m[1], n:+m[2]} : null; }
-  function limitTick(){
-    var mi = modeInfo(), el = $("limitNow");
-    if(!mi){ el.textContent = "None"; return; }
-    if(mi.kind === "t"){
-      var left = mi.n * 1000 - elapsed();
-      el.textContent = fmt(Math.max(0, left));
-      if(left <= 0 && !ended) failRun("Time limit reached");
-    } else el.textContent = Math.max(0, mi.n - clicks) + " left";
-  }
-  function limitHit(){
-    var mi = modeInfo();
-    if(mi && mi.kind === "c" && clicks >= mi.n){ failRun("Out of clicks"); return true; }
-    return false;
-  }
-  function failRun(msg){
-    if(ended) return;
-    ended = true; stopClock(); cancelAnimationFrame(raf); busy = true;
-    $("solveTitle").textContent = msg;
-    sendProg(false, true); showSolve();
-  }
-
-  // Wild route: two random Wikipedia articles, both reasonably long so they have plenty of links.
-  function wildRoute(tries){
-    setErr("Finding two random articles…");
-    api({action:"query", generator:"random", grnnamespace:0, grnlimit:25, prop:"info"}).then(function(d){
-      var l = ((d.query && d.query.pages) || []).filter(function(p){ return p.length > 25000; }).map(function(p){ return p.title; });
-      if(l.length < 2){ if((tries||0) < 4) return wildRoute((tries||0) + 1); setErr(""); return randomRoute(); }
-      $("fromIn").value = l[0]; $("toIn").value = l[1]; setErr(""); updateBest();
-    }).catch(function(){ setErr("Could not reach Wikipedia."); });
-  }
-
-  function renderRecords(runs){
-    var best = {};
-    runs.forEach(function(r){ var k = r.f + " to " + r.t; if(!best[k] || r.ms < best[k].ms) best[k] = r; });
-    var ol = $("recList"); ol.innerHTML = "";
-    var keys = Object.keys(best).sort(function(a, b){ return best[a].ms - best[b].ms; }).slice(0, 5);
-    if(!keys.length){ var e = document.createElement("li"); e.textContent = "No records yet."; ol.appendChild(e); }
-    keys.forEach(function(k){
-      var li = document.createElement("li"), t = document.createElement("span"), m = document.createElement("span");
-      t.className = "t"; t.textContent = k;
-      m.className = "ms"; m.textContent = fmt(best[k].ms) + ", " + best[k].c + (best[k].c === 1 ? " click" : " clicks");
-      li.appendChild(t); li.appendChild(m); ol.appendChild(li);
-    });
-  }
-
-  $("wildBtn").onclick = function(){ wildRoute(0); };
-  $("exportBtn").onclick = function(){
-    var o = {runs:store("runs") || [], ach:store("ach") || {}, daily:store("daily") || []};
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(o)], {type:"application/json"}));
-    a.download = "rabbit-hole-data.json"; a.click();
-    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
-  };
-  $("importBtn").onclick = function(){ $("impFile").click(); };
-  $("impFile").onchange = function(){
-    var f = this.files[0]; if(!f) return;
-    var rd = new FileReader();
-    rd.onload = function(){
-      try{
-        var o = JSON.parse(rd.result);
-        if(Array.isArray(o.runs)) store("runs", o.runs.slice(-200));
-        if(o.ach && typeof o.ach === "object" && !Array.isArray(o.ach)) store("ach", o.ach);
-        if(Array.isArray(o.daily)) store("daily", o.daily.slice(-400));
-        renderStats(); updateDaily();
-      }catch(e){ alert("That file is not valid Rabbit Hole data."); }
-    };
-    rd.readAsText(f); this.value = "";
-  };
-  document.addEventListener("keydown", function(e){
-    if(e.ctrlKey || e.metaKey || e.altKey) return;
-    if(e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
-    if($("game").classList.contains("hidden") || document.querySelector(".win:not(.hidden)")) return;
-    if(e.key === "b" || e.key === "B") goBack(); else if(e.key === "h" || e.key === "H") hint();
-  });
 
   var qs = new URLSearchParams(location.search);
   if(qs.get("from") && qs.get("to")){ $("fromIn").value = qs.get("from"); $("toIn").value = qs.get("to"); updateBest(); }

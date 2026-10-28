@@ -17,15 +17,3 @@
   else if(themeMedia.addListener) themeMedia.addListener(function(){if(themeSelect.value==="system")applyTheme("system");});
 
 })();
-
-(function(){
-  var sel = document.getElementById("sizeSelect"), SIZES = {small:"13px", normal:"14px", large:"17px"}, v = "normal";
-  try { v = localStorage.getItem("rabbit-hole:size") || "normal"; } catch(e){}
-  if(!SIZES[v]) v = "normal";
-  sel.value = v;
-  document.documentElement.style.setProperty("--fs", SIZES[v]);
-  sel.addEventListener("change", function(){
-    document.documentElement.style.setProperty("--fs", SIZES[this.value]);
-    try { localStorage.setItem("rabbit-hole:size", this.value); } catch(e){}
-  });
-})();
