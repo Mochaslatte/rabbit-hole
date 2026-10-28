@@ -10,12 +10,16 @@
 </head>
 <body>
 
-<div class="top"><span class="logo">Rabbit Hole</span><span class="logo"><small>the free speedrun game, built on Wikipedia</small></span><label class="theme-control" for="themeSelect">Appearance <select id="themeSelect" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div>
+<div class="top"><span class="logo">Rabbit Hole</span><span class="logo"><small>the free speedrun game, built on Wikipedia</small></span><label class="theme-control" for="themeSelect">Appearance <select id="themeSelect" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><label class="size-control" for="sizeSelect">Text size <select id="sizeSelect" aria-label="Text size"><option value="small">Small</option><option value="normal">Normal</option><option value="large">Large</option></select></label><button class="btn" id="statsBtn">Stats</button></div>
 
 <div class="gbar hidden" id="gbar">
   <div class="big" id="timer">0:00.00</div>
   <div class="k">Clicks<b id="clicks">0</b></div>
+  <div class="k">Best<b id="bestNow">-</b></div>
+  <div class="k">Limit<b id="limitNow">None</b></div>
   <div class="goal">Get to<b id="goalTitle"></b></div>
+  <button class="btn" id="backBtn" disabled>Back (+1 click)</button>
+  <button class="btn" id="hintBtn">Hint (+10s)</button>
   <button class="btn danger" id="quitBtn">Give up</button>
 </div>
 
@@ -32,6 +36,7 @@
     </div>
     <div class="panel hint hidden" id="targetPanel">
       <h3>Target</h3>
+      <p id="targetInfo" class="tinfo"></p>
       <p><a id="targetLink" target="_blank" rel="noopener">Read about the target</a><br><span style="color:var(--muted)">Opens in a new tab. The clock keeps running.</span></p>
     </div>
   </aside>
@@ -52,12 +57,25 @@
           <input type="text" id="toIn" autocomplete="off" placeholder="e.g. Assassination of Charlie Kirk">
           <div class="sug hidden" id="toSug"></div>
         </div>
+        <div class="field">
+          <label for="modeSel">Mode</label>
+          <select id="modeSel">
+            <option value="std">Standard</option>
+            <option value="c5">Click limit: 5 clicks</option>
+            <option value="c8">Click limit: 8 clicks</option>
+            <option value="t120">Time limit: 2 minutes</option>
+            <option value="t300">Time limit: 5 minutes</option>
+          </select>
+        </div>
         <p class="err" id="err" role="alert"></p>
         <div class="row">
           <button class="btn primary" id="goBtn">Start the clock</button>
           <button class="btn" id="randBtn">Random route</button>
+          <button class="btn" id="dailyBtn">Daily route</button>
+          <button class="btn" id="wildBtn">Wild route</button>
         </div>
         <div class="best" id="bestLine"></div>
+        <div class="best" id="dailyLine"></div>
       </div>
       <div class="form" id="partyBox">
         <label>Play with friends</label>
@@ -79,7 +97,7 @@
         </div>
         <p class="err" id="partyMsg" style="margin:8px 0 0"></p>
       </div>
-      <p class="tips">Type any article name and pick a suggestion, or press Random route. Only blue links inside the article text count. The timer pauses while pages load. Challenge a friend: after a run, copy the challenge link and they get the same route.</p>
+      <p class="tips">Type any article name and pick a suggestion, or press Random route. Only blue links inside the article text count. The timer pauses while pages load. Challenge a friend: after a run, copy the challenge link and they get the same route. During a run, press B to go back or H for a hint.</p>
     </section>
 
     <!-- game -->
@@ -102,7 +120,9 @@
   <div class="card">
     <h2 id="winTitle">You reached the target<span class="pb hidden" id="pb">New best</span></h2>
     <div class="big" id="winTime"></div>
-    <p id="winClicks" style="margin:4px 0 10px"></p>
+    <p id="winClicks" style="margin:4px 0 4px"></p>
+    <p id="winPar" style="margin:0 0 4px;color:var(--muted)"></p>
+    <p id="winAch" style="margin:0 0 10px;color:var(--green);font-weight:700"></p>
     <h3 style="margin:10px 0 4px;font-size:14px">Your path</h3>
     <ol class="log" id="winPath"></ol>
     <div id="standings" class="hidden">
@@ -125,6 +145,21 @@
     <p id="solveStatus" style="font-weight:700"></p>
     <ol class="log" id="solveList"></ol>
     <div class="row" style="margin-top:16px"><button class="btn primary" id="solveBack">Back to menu</button></div>
+  </div>
+</div>
+
+<div class="win hidden" id="stats" role="dialog" aria-modal="true" aria-labelledby="statsTitle">
+  <div class="card" style="max-width:600px">
+    <h2 id="statsTitle">Your statistics</h2>
+    <div class="sgrid" id="sgrid"></div>
+    <h3 class="sh">Achievements</h3>
+    <ul class="ach" id="achList"></ul>
+    <h3 class="sh">Route records</h3>
+    <ol class="log" id="recList"></ol>
+    <h3 class="sh">Recent runs</h3>
+    <ol class="log" id="runList"></ol>
+    <div class="row" style="margin-top:16px"><button class="btn primary" id="statsClose">Close</button><button class="btn" id="exportBtn">Export data</button><button class="btn" id="importBtn">Import data</button><button class="btn danger" id="statsClear">Clear data</button></div>
+    <input type="file" id="impFile" accept="application/json" class="hidden">
   </div>
 </div>
 
