@@ -37,12 +37,11 @@
   </aside>
 
   <main>
-    <!-- setup -->
+    
     <section class="setup" id="setup">
       <h1 class="firstHeading">Rabbit Hole</h1>
       <p class="lead"><b>Rabbit Hole</b> is a game where you travel from one Wikipedia article to another using only the links inside the articles. Reach the target with the <b>fewest clicks</b> and the <b>fastest time</b>.</p>
-      <div class="form" id="profileBox"><label>Your profile</label><div class="row"><input id="profileName" maxlength="16" placeholder="Display name" aria-label="Display name"><button class="btn" id="saveProfile">Save profile</button></div><p id="profileStats" class="tips"></p></div>
-      <div class="form" id="modeBox"><label for="gameMode">Game mode</label><select id="gameMode"><option value="classic">Classic - fastest time</option><option value="fewest">Fewest clicks - optimize your path</option><option value="sprint">Sprint - 60-second challenge</option></select><p id="modeHelp" class="tips">Reach the target as quickly as possible.</p></div>
+      <button class="btn" id="tutorialOpen" type="button">How to play</button>
       <div class="form" id="routeForm">
         <div class="field">
           <label for="fromIn">Start article</label>
@@ -84,7 +83,7 @@
       <p class="tips">Type any article name and pick a suggestion, or press Random route. Only blue links inside the article text count. The timer pauses while pages load. Challenge a friend: after a run, copy the challenge link and they get the same route.</p>
     </section>
 
-    <!-- game -->
+    
     <section class="hidden" id="game">
       <div class="artwrap"><div id="article"></div></div>
       <p style="color:var(--muted);font-size:12px;margin-top:30px;border-top:1px solid var(--soft);padding-top:8px">Text from <a href="https://www.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a>, available under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>.</p>
@@ -120,6 +119,10 @@
   </div>
 </div>
 
+<aside id="partyChat" class="hidden" aria-label="Party chat"><h3>Party chat</h3><div id="chatMessages" aria-live="polite"></div><div class="row"><input id="chatInput" maxlength="240" placeholder="Message" aria-label="Chat message"><button class="btn" id="chatSend">Send</button></div></aside>
+<div id="remoteCursor" class="hidden" aria-hidden="true"></div>
+<div id="spectateBox" class="hidden"><label for="spectatePlayer">Spectate a player</label><select id="spectatePlayer"><option value="">Choose a player</option></select><button class="btn" id="stopSpectate">Stop spectating</button></div>
+<div class="win hidden" id="tutorial" role="dialog" aria-modal="true"><div class="card"><h2>How to play Rabbit Hole</h2><p>Choose a starting Wikipedia article and a target article, or select Random route.</p><p>Click blue article links to travel from page to page. Reach the target using as few clicks and as little time as possible.</p><p>Create a party to play the same route with friends. Share the party code or invite link. When you finish, select another player to spectate their article and mouse cursor. Use the party chat to talk while playing.</p><button class="btn primary" id="tutorialClose">Got it</button></div></div>
 <div class="win hidden" id="solve" role="dialog" aria-modal="true" aria-labelledby="solveTitle">
   <div class="card">
     <h2 id="solveTitle">How you could have done it</h2>
