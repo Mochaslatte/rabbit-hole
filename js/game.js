@@ -2,25 +2,18 @@
   var API = "https://en.wikipedia.org/w/api.php";
   var POOL = ["Pizza","Albert Einstein","Moon","Ancient Rome","Association football","Guitar","Volcano","Chocolate","Titanic","Cat","Mount Everest","Electricity","Leonardo da Vinci","Coffee","Jazz","Dinosaur","Great Pyramid of Giza","Japan","Bicycle","Great white shark","Bitcoin","Napoleon","Oxygen","Olympic Games","Vampire","Pacific Ocean","Telescope","William Shakespeare","Hamburger","Sahara","Penguin","Internet","World War II","Basketball","Chess","Rainbow","Sushi","Solar System","Wolfgang Amadeus Mozart","Amazon River","Honey","Tornado","Elephant","Brazil","Vincent van Gogh","Lightning","Bread"];
   var $ = function(id){return document.getElementById(id)};
-  var from, to;
+  var from, to;                 // canonical titles for the current run
   var clicks, path, acc, last, running, raf, busy, startedAt;
-  var joining = false;
-  var lastJoin = 0, lastNameChange = 0, lastChat = 0, lastCursor = 0;
-  var spectator = null, remotePage = null, currentPage = "", finished = false;
-  var chatHistory = [];
-  function nameValue(){ return ($("partyName").value.trim().replace(/[^a-zA-Z0-9 _-]/g, "").slice(0,16) || "Player"); }
-  $("partyName").addEventListener("input", function(){
-    if(party && Date.now()-lastNameChange<5000) return;
-    if(party){ lastNameChange=Date.now(); var n=nameValue(); if(party.isHost){party.players[party.me].name=n;pushPlayers();}else if(party.hostConn&&party.hostConn.open)party.hostConn.send({t:"name",name:n}); }
-  });
 
+
+  /* ---------- helpers ---------- */
   function norm(t){ return (t||"").replace(/_/g," ").trim().toLowerCase(); }
   function fmt(ms){
     var cs = Math.floor(ms/10)%100, s = Math.floor(ms/1000)%60, m = Math.floor(ms/60000);
     return m + ":" + (s<10?"0":"") + s + "." + (cs<10?"0":"") + cs;
   }
   function elapsed(){ return acc + (running ? performance.now() - last : 0); }
-  function tick(){ $("timer").textContent=fmt(elapsed()); raf=requestAnimationFrame(tick); }
+  function tick(){ $("timer").textContent = fmt(elapsed()); raf = requestAnimationFrame(tick); }
   function startClock(){ if(!running){ last = performance.now(); running = true; } }
   function stopClock(){ if(running){ acc += performance.now() - last; running = false; } }
   function api(params){
@@ -32,6 +25,7 @@
   function setBest(o){ try { localStorage.setItem(key(), JSON.stringify(o)); } catch(e){} }
   function setErr(m){ $("err").textContent = m || ""; }
 
+  /* ---------- autocomplete ---------- */
   function suggest(input, box){
     var timer, items = [], idx = -1, seq = 0;
     function hide(){ box.classList.add("hidden"); idx = -1; }
@@ -69,6 +63,7 @@
   suggest($("fromIn"), $("fromSug"));
   suggest($("toIn"), $("toSug"));
 
+  /* ---------- setup ---------- */
   function updateBest(){
     var f = $("fromIn").value.trim(), t = $("toIn").value.trim();
     var b = f && t ? getBest(f,t) : null;
@@ -110,8 +105,9 @@
     });
   }
 
+  /* ---------- run ---------- */
   function startRun(){
-    clicks = 0; path = []; acc = 0; running = false; busy = false; finished=false; spectator=null; remotePage=null;
+    clicks = 0; path = []; acc = 0; running = false; busy = false;
     $("clicks").textContent = "0"; $("timer").textContent = fmt(0);
     $("goalTitle").textContent = to;
     var tl = $("targetLink"); tl.href = "https://en.wikipedia.org/wiki/" + encodeURIComponent(to.replace(/ /g,"_"));
@@ -120,7 +116,7 @@
     $("win").classList.add("hidden");
     document.documentElement.style.setProperty("--barh", $("gbar").offsetHeight + "px");
     $("solve").classList.add("hidden");
-    renderLog(); renderBoard(); updateSpectate();
+    renderLog(); renderBoard();
     cancelAnimationFrame(raf); tick();
     load(from, true);
   }
@@ -136,7 +132,7 @@
       if(!d.parse) throw new Error("missing");
       var real = d.parse.title;
       path.push({title:real, ms:elapsed()});
-      currentPage=real; render(real, d.parse.text); publishView();
+      render(real, d.parse.text);
       ov.remove(); busy = false;
       renderLog();
       if(!isStart && norm(real) === norm(to)){ finish(); return; }
@@ -205,7 +201,7 @@
 
   function onNav(e){
     var a = e.target.closest && e.target.closest("a.go");
-    if(!a || spectator) return;
+    if(!a) return;
     if(e.type==="keydown" && e.key!=="Enter") return;
     e.preventDefault();
     load(a.getAttribute("data-title"), false);
@@ -214,7 +210,6 @@
   function finish(){
     stopClock(); cancelAnimationFrame(raf);
     var ms = elapsed();
-    finished=true;
     sendProg(true,false);
     $("timer").textContent = fmt(ms);
     $("winTime").textContent = fmt(ms);
@@ -232,14 +227,14 @@
     if(nb) setBest({ms:Math.round(ms), clicks:clicks});
     $("pb").classList.toggle("hidden", !nb);
     $("win").classList.remove("hidden");
-    $("againBtn").focus(); renderBoard(); updateSpectate();
+    $("againBtn").focus(); renderBoard();
   }
 
   function home(){
     stopClock(); cancelAnimationFrame(raf);
     $("game").classList.add("hidden"); $("gbar").classList.add("hidden"); $("targetPanel").classList.add("hidden");
     $("win").classList.add("hidden"); $("solve").classList.add("hidden"); solveToken++; $("setup").classList.remove("hidden");
-    spectator=null; finished=false; updateSpectate(); path = []; renderLog(); document.documentElement.style.setProperty("--barh","0px");
+    path = []; renderLog(); document.documentElement.style.setProperty("--barh","0px");
     window.scrollTo(0,0); updateBest(); renderLobby(); renderBoard();
   }
 
@@ -250,6 +245,7 @@
     }, function(){});
   }
 
+  /* ---------- wiring ---------- */
   $("article").addEventListener("click", onNav);
   $("article").addEventListener("keydown", onNav);
   $("goBtn").onclick = begin;
@@ -267,8 +263,9 @@
     $(id).addEventListener("keydown", function(e){ if(e.key==="Enter" && $(id).nextElementSibling.classList.contains("hidden")) begin(); });
   });
 
+  /* ---------- party (peer-to-peer via PeerJS, no server needed) ---------- */
   var party = null;
-  function myName(){ return nameValue(); }
+  function myName(){ var n = $("partyName").value.trim().slice(0,16); return n || ("Player" + (10+Math.floor(Math.random()*90))); }
   function setPartyMsg(m){ $("partyMsg").textContent = m || ""; }
   function plist(){ return party ? Object.keys(party.players).map(function(k){ return party.players[k]; }) : []; }
   function broadcast(m){ Object.keys(party.conns).forEach(function(id){ try{ party.conns[id].send(m); }catch(e){} }); }
@@ -283,7 +280,7 @@
     function r(p){ return p.done ? 0 : (p.gaveUp ? 2 : 1); }
     return list.slice().sort(function(a,b){
       if(r(a)!==r(b)) return r(a)-r(b);
-      return r(a)===0 ? a.ms-b.ms || a.clicks-b.clicks : a.clicks-b.clicks;
+      return r(a)===0 ? a.ms-b.ms : a.clicks-b.clicks;
     });
   }
   function fillBoard(ol, list, withStatus){
@@ -302,7 +299,6 @@
     $("boardPanel").classList.toggle("hidden", !inGame);
     $("standings").classList.toggle("hidden", !party);
     if(!party) return;
-    updateSpectate();
     var l = plist(); fillBoard($("board"), l, true); fillBoard($("standingsList"), l, true);
   }
   function renderLobby(){
@@ -312,8 +308,7 @@
     $("routeForm").classList.toggle("hidden", guest);
     $("wait").classList.toggle("hidden", !guest);
     $("goBtn").textContent = party && party.isHost ? "Start for everyone" : "Start the clock";
-    if(!party) {updateChat();return;}
-    updateChat();
+    if(!party) return;
     $("pcode").textContent = party.code;
     var ol = $("lobbyList"); ol.innerHTML = "";
     plist().forEach(function(p){
@@ -323,8 +318,7 @@
     });
   }
   function leaveParty(keepMsg){
-    joining=false; $("joinBtn").disabled=false; spectator=null; updateSpectate();
-    if(party){ if(party.joinTimer) clearTimeout(party.joinTimer); try{ party.peer.destroy(); }catch(e){} party = null; }
+    if(party){ try{ party.peer.destroy(); }catch(e){} party = null; }
     if(!keepMsg) setPartyMsg("");
     if(!$("game").classList.contains("hidden")) home();
     renderLobby(); renderBoard();
@@ -338,11 +332,9 @@
 
   function createParty(tries){
     if(typeof Peer === "undefined"){ setPartyMsg("Party mode could not load. Check your connection and refresh."); return; }
-    if(party || joining) return;
-    if(Date.now()-lastJoin<2500){setPartyMsg("Please wait before creating another party.");return;} lastJoin=Date.now();
     var c = newCode(), name = myName();
     var peer = new Peer("rabbit-hole-" + c);
-    var p = party = {isHost:true, code:c, peer:peer, conns:{}, players:{}, me:null, accepted:{}, attempts:{}};
+    var p = party = {isHost:true, code:c, peer:peer, conns:{}, players:{}, me:null};
     setPartyMsg("Creating party…");
     peer.on("open", function(id){
       p.me = id; p.players[id] = {id:id, name:name, host:true, clicks:0, done:false, gaveUp:false, ms:0};
@@ -350,31 +342,16 @@
     });
     peer.on("connection", function(conn){
       conn.on("data", function(m){
-        if(!m || typeof m !== "object" || party!==p) return;
-        if(m.t==="join" && conn.open){
-          var now=Date.now(), key=String(conn.peer);
-          if(p.accepted[key] || (p.attempts[key] && now-p.attempts[key]<2500)){conn.send({t:"rejected",reason:"Duplicate join or rate limit."});conn.close();return;}
-          p.attempts[key]=now;
-          if(Object.keys(p.players).length>=12){conn.send({t:"rejected",reason:"Party is full."});conn.close();return;}
-          p.accepted[key]=true;
+        if(m.t==="join"){
           p.conns[conn.peer] = conn;
           p.players[conn.peer] = {id:conn.peer, name:String(m.name||"Player").slice(0,16), clicks:0, done:false, gaveUp:false, ms:0};
-          conn.send({t:"joined", code:p.code});
           pushPlayers();
         } else if(m.t==="prog" && p.players[conn.peer]){
           Object.assign(p.players[conn.peer], {clicks:m.clicks|0, done:!!m.done, gaveUp:!!m.gaveUp, ms:m.ms|0});
           pushPlayers();
-        } else if(p.players[conn.peer] && m.t==="name"){
-          if(!p.players[conn.peer].lastRename || Date.now()-p.players[conn.peer].lastRename>=5000){p.players[conn.peer].lastRename=Date.now();p.players[conn.peer].name=String(m.name||"Player").replace(/[^a-zA-Z0-9 _-]/g,"").slice(0,16);pushPlayers();}
-        } else if(p.players[conn.peer] && m.t==="chat"){
-          if(!p.players[conn.peer].lastChat || Date.now()-p.players[conn.peer].lastChat>=900){p.players[conn.peer].lastChat=Date.now();receiveChat({name:p.players[conn.peer].name,text:censor(m.text)});broadcast({t:"chat",name:p.players[conn.peer].name,text:censor(m.text)});}
-        } else if(p.players[conn.peer] && m.t==="view"){
-          if(typeof m.title==="string" && m.title.length<180){p.players[conn.peer].page=m.title;receiveView(conn.peer,m.title);broadcast({t:"view",id:conn.peer,title:m.title});}
-        } else if(p.players[conn.peer] && m.t==="cursor"){
-          if(typeof m.x==="number"&&typeof m.y==="number"){receiveCursor(conn.peer,m.x,m.y);broadcast({t:"cursor",id:conn.peer,x:Math.max(0,Math.min(1,m.x)),y:Math.max(0,Math.min(1,m.y))});}
         }
       });
-      conn.on("close", function(){ if(p.conns[conn.peer]===conn){ delete p.conns[conn.peer]; delete p.players[conn.peer]; delete p.accepted[conn.peer]; if(party===p) pushPlayers(); } });
+      conn.on("close", function(){ delete p.conns[conn.peer]; delete p.players[conn.peer]; if(party===p) pushPlayers(); });
     });
     peer.on("error", function(e){
       if(party!==p) return;
@@ -385,39 +362,31 @@
 
   function joinParty(){
     var c = $("joinCode").value.trim().toUpperCase();
-    if(party || joining) return;
-    if(Date.now()-lastJoin<2500){setPartyMsg("Please wait before joining again.");return;} lastJoin=Date.now();
     if(c.length !== 4){ setPartyMsg("Enter the 4-letter party code."); return; }
     if(typeof Peer === "undefined"){ setPartyMsg("Party mode could not load. Check your connection and refresh."); return; }
-    joining = true; $("joinBtn").disabled=true;
-    var name = myName(), peer = new Peer(), acknowledged = false;
+    var name = myName(), peer = new Peer(), opened = false;
     var p = party = {isHost:false, code:c, peer:peer, conns:{}, players:{}, me:null, hostConn:null};
     setPartyMsg("Joining…");
-    p.joinTimer = setTimeout(function(){ if(!acknowledged && party===p){ setPartyMsg("Could not reach that party. Check the code and try again."); leaveParty(true); } }, 12000);
+    var tmo = setTimeout(function(){ if(!opened && party===p){ setPartyMsg("Could not reach that party."); leaveParty(true); } }, 12000);
     peer.on("open", function(id){
       p.me = id;
       var conn = p.hostConn = peer.connect("rabbit-hole-" + c, {reliable:true});
-      conn.on("open", function(){ if(party===p) conn.send({t:"join", name:name}); });
+      conn.on("open", function(){ opened = true; clearTimeout(tmo); setPartyMsg(""); conn.send({t:"join", name:name}); renderLobby(); });
       conn.on("data", function(m){
-        if(!m || party!==p) return;
-        if(m.t==="joined"){ acknowledged=true; joining=false; $("joinBtn").disabled=false; clearTimeout(p.joinTimer); setPartyMsg(""); renderLobby(); }
-        else if(m.t==="players" && Array.isArray(m.list)){ p.players = {}; m.list.forEach(function(x){ if(x && typeof x.id==="string") p.players[x.id] = x; }); renderLobby(); renderBoard(); }
+        if(m.t==="players"){ p.players = {}; m.list.forEach(function(x){ p.players[x.id] = x; }); renderLobby(); renderBoard(); }
         else if(m.t==="start"){ from = m.from; to = m.to; startRun(); }
-        else if(m.t==="rejected"){setPartyMsg(String(m.reason||"Join rejected."));leaveParty(true);}
-        else if(m.t==="chat"){receiveChat({name:String(m.name||"Player"),text:censor(m.text)});}
-        else if(m.t==="view"){receiveView(m.id,m.title);}
-        else if(m.t==="cursor"){receiveCursor(m.id,m.x,m.y);}
       });
-      conn.on("close", function(){ if(party===p){ setPartyMsg(acknowledged ? "The host disconnected." : "Could not connect to that party."); leaveParty(true); } });
+      conn.on("close", function(){ if(party===p){ setPartyMsg("The host left the party."); leaveParty(true); } });
     });
     peer.on("error", function(e){
       if(party!==p) return;
-      clearTimeout(p.joinTimer);
+      clearTimeout(tmo);
       setPartyMsg(e.type==="peer-unavailable" ? "No party with that code." : "Connection error (" + e.type + ").");
       leaveParty(true);
     });
   }
 
+  /* ---------- route finder (for "give up" and "show shortest route") ---------- */
   var htmlCache = {}, solveToken = 0;
   function getHtml(t){
     if(!htmlCache[t]) htmlCache[t] = api({action:"parse", page:t, redirects:1, prop:"text", disableeditsection:1}).then(function(d){ return d.parse ? d.parse.text : ""; });
@@ -560,82 +529,8 @@
   renderLobby();
 
 
-
-  function censor(value){
-    var words=["fuck","shit","bitch","cunt","nigger","faggot","retard","asshole"];
-    var text=String(value||"").slice(0,240);
-    words.forEach(function(w){text=text.replace(new RegExp("\\b"+w+"\\b","gi"),"*".repeat(w.length));});
-    return text;
-  }
-  function receiveChat(msg){
-    chatHistory.push({name:String(msg.name||"Player").slice(0,16),text:censor(msg.text)});
-    chatHistory=chatHistory.slice(-60);
-    var box=$("chatMessages");box.textContent="";
-    chatHistory.forEach(function(x){var d=document.createElement("div"),b=document.createElement("b");b.textContent=x.name+": ";d.appendChild(b);d.appendChild(document.createTextNode(x.text));box.appendChild(d);});
-    box.scrollTop=box.scrollHeight;
-  }
-  function updateChat(){ $("partyChat").classList.toggle("hidden",!party); }
-  $("chatSend").onclick=function(){
-    if(!party || Date.now()-lastChat<900)return;
-    var input=$("chatInput"),msg=censor(input.value.trim());if(!msg)return;
-    lastChat=Date.now();input.value="";
-    if(party.isHost){receiveChat({name:myName(),text:msg});broadcast({t:"chat",name:myName(),text:msg});}
-    else if(party.hostConn&&party.hostConn.open)party.hostConn.send({t:"chat",text:msg});
-  };
-  $("chatInput").onkeydown=function(e){if(e.key==="Enter")$("chatSend").click();};
-  function publishView(){
-    if(!party || !currentPage)return;
-    if(party.isHost){if(party.players[party.me])party.players[party.me].page=currentPage;broadcast({t:"view",id:party.me,title:currentPage});}
-    else if(party.hostConn&&party.hostConn.open)party.hostConn.send({t:"view",title:currentPage});
-  }
-  function receiveView(id,title){
-    if(!party || typeof id!=="string" || typeof title!=="string" || title.length>180)return;
-    if(party.players[id])party.players[id].page=title;
-    if(spectator===id && remotePage!==title){remotePage=title;showRemote(title);}
-  }
-  function receiveCursor(id,x,y){
-    if(spectator!==id || !Number.isFinite(x) || !Number.isFinite(y))return;
-    var dot=$("remoteCursor");dot.classList.remove("hidden");
-    var r=$("article").getBoundingClientRect();
-    dot.style.left=(r.left+Math.max(0,Math.min(1,x))*r.width)+"px";
-    dot.style.top=(r.top+Math.max(0,Math.min(1,y))*r.height)+"px";
-  }
-  $("article").addEventListener("mousemove",function(e){
-    if(!party || spectator || Date.now()-lastCursor<75)return;
-    lastCursor=Date.now();var r=this.getBoundingClientRect();
-    var data={t:"cursor",id:party.me,x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};
-    if(party.isHost)broadcast(data);
-    else if(party.hostConn&&party.hostConn.open)party.hostConn.send(data);
-  });
-  function showRemote(title){
-    api({action:"parse",page:title,redirects:1,prop:"text",disableeditsection:1}).then(function(d){
-      if(!spectator || remotePage!==title || !d.parse)return;
-      render(d.parse.title,d.parse.text);
-    }).catch(function(){});
-  }
-  function updateSpectate(){
-    var box=$("spectateBox"),sel=$("spectatePlayer");
-    box.classList.toggle("hidden",!party || !finished);
-    if(!party || !finished)return;
-    var selected=sel.value;sel.textContent="";
-    var o=document.createElement("option");o.value="";o.textContent="Choose a player";sel.appendChild(o);
-    plist().filter(function(p){return p.id!==party.me && !p.done && !p.gaveUp;}).forEach(function(p){var opt=document.createElement("option");opt.value=p.id;opt.textContent=p.name;sel.appendChild(opt);});
-    sel.value=selected;
-  }
-  $("spectatePlayer").onchange=function(){
-    spectator=this.value||null;remotePage=null;$("remoteCursor").classList.add("hidden");
-    if(!spectator)return;
-    $("win").classList.add("hidden");
-    var player=party&&party.players[spectator];if(player&&player.page){remotePage=player.page;showRemote(remotePage);}
-  };
-  $("stopSpectate").onclick=function(){spectator=null;$("remoteCursor").classList.add("hidden");$("win").classList.remove("hidden");updateSpectate();};
-  $("article").addEventListener("click",function(e){if(spectator){e.preventDefault();e.stopImmediatePropagation();}},true);
-  $("tutorialClose").onclick=function(){localStorage.setItem("rabbit-hole:tutorialSeen","1");$("tutorial").classList.add("hidden");};
-  $("tutorialOpen").onclick=function(){$("tutorial").classList.remove("hidden");};
-  if(!localStorage.getItem("rabbit-hole:tutorialSeen"))$("tutorial").classList.remove("hidden");
-
   var qs = new URLSearchParams(location.search);
   if(qs.get("from") && qs.get("to")){ $("fromIn").value = qs.get("from"); $("toIn").value = qs.get("to"); updateBest(); }
   else randomRoute();
-  if(qs.get("party")){ $("joinCode").value = qs.get("party").toUpperCase().slice(0,4); setTimeout(joinParty,350); }
+  if(qs.get("party")){ $("joinCode").value = qs.get("party").toUpperCase().slice(0,4); $("partyName").focus(); }
 })();
