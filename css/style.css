@@ -107,3 +107,5 @@ main{background:var(--paper);border:1px solid var(--border);border-top:0;min-hei
 .site-credits{margin-top:28px;padding-top:12px;border-top:1px solid var(--soft);font-size:12px;color:var(--muted)}
 .site-credits summary{cursor:pointer;font-weight:600}
 .site-credits p{margin:8px 0}
+
+#profileBox .row input{flex:1;min-width:130px}#modeBox select{width:100%;max-width:430px;padding:9px;border:1px solid var(--soft);background:var(--bg);color:var(--text)}
