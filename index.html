@@ -41,6 +41,8 @@
     <section class="setup" id="setup">
       <h1 class="firstHeading">Rabbit Hole</h1>
       <p class="lead"><b>Rabbit Hole</b> is a game where you travel from one Wikipedia article to another using only the links inside the articles. Reach the target with the <b>fewest clicks</b> and the <b>fastest time</b>.</p>
+      <div class="form" id="profileBox"><label>Your profile</label><div class="row"><input id="profileName" maxlength="16" placeholder="Display name" aria-label="Display name"><button class="btn" id="saveProfile">Save profile</button></div><p id="profileStats" class="tips"></p></div>
+      <div class="form" id="modeBox"><label for="gameMode">Game mode</label><select id="gameMode"><option value="classic">Classic — fastest time</option><option value="fewest">Fewest clicks — optimize your path</option><option value="sprint">Sprint — 60-second challenge</option></select><p id="modeHelp" class="tips">Reach the target as quickly as possible.</p></div>
       <div class="form" id="routeForm">
         <div class="field">
           <label for="fromIn">Start article</label>
@@ -77,7 +79,7 @@
           <ol class="log" id="lobbyList"></ol>
           <p id="wait" class="hidden" style="font-weight:700">Waiting for the host to start the round…</p>
         </div>
-        <p class="err" id="partyMsg" style="margin:8px 0 0"></p>
+        <p class="tips">Invite links automatically join the party. Repeated Join clicks are safely ignored.</p><p class="err" id="partyMsg" style="margin:8px 0 0"></p>
       </div>
       <p class="tips">Type any article name and pick a suggestion, or press Random route. Only blue links inside the article text count. The timer pauses while pages load. Challenge a friend: after a run, copy the challenge link and they get the same route.</p>
     </section>
