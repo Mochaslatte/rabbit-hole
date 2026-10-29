@@ -4,6 +4,13 @@
   var $ = function(id){return document.getElementById(id)};
   var from, to;                 // canonical titles for the current run
   var clicks, path, acc, last, running, raf, busy, startedAt;
+  var mode = "classic", sprintExpired = false, joining = false;
+  var profile = (function(){ try{return JSON.parse(localStorage.getItem("rabbit-hole:profile")) || {name:"",runs:0,wins:0,clicks:0,bestMs:null};}catch(e){return {name:"",runs:0,wins:0,clicks:0,bestMs:null};} })();
+  function saveProfile(){localStorage.setItem("rabbit-hole:profile",JSON.stringify(profile)); updateProfile();}
+  function updateProfile(){ $("profileName").value=profile.name||""; $("partyName").value=profile.name||""; $("profileStats").textContent="Completed: "+(profile.wins||0)+" | Attempts: "+(profile.runs||0)+" | Total clicks: "+(profile.clicks||0)+(profile.bestMs!=null?" | Fastest: "+fmt(profile.bestMs):""); }
+  $("saveProfile").onclick=function(){profile.name=$("profileName").value.trim().slice(0,16);saveProfile();};
+  $("gameMode").onchange=function(){mode=this.value;$("modeHelp").textContent={classic:"Reach the target as quickly as possible.",fewest:"Win by using the fewest links; time breaks ties.",sprint:"You have 60 seconds to reach the target."}[mode];};
+  updateProfile();
 
 
   /* ---------- helpers ---------- */
@@ -13,7 +20,7 @@
     return m + ":" + (s<10?"0":"") + s + "." + (cs<10?"0":"") + cs;
   }
   function elapsed(){ return acc + (running ? performance.now() - last : 0); }
-  function tick(){ $("timer").textContent = fmt(elapsed()); raf = requestAnimationFrame(tick); }
+  function tick(){ $("timer").textContent = mode==="sprint" ? fmt(Math.max(0,60000-elapsed())) : fmt(elapsed()); if(mode==="sprint" && running && elapsed()>=60000 && !sprintExpired){sprintExpired=true;giveUp();setErr("Sprint time is up!");return;} raf = requestAnimationFrame(tick); }
   function startClock(){ if(!running){ last = performance.now(); running = true; } }
   function stopClock(){ if(running){ acc += performance.now() - last; running = false; } }
   function api(params){
@@ -107,7 +114,7 @@
 
   /* ---------- run ---------- */
   function startRun(){
-    clicks = 0; path = []; acc = 0; running = false; busy = false;
+    clicks = 0; path = []; acc = 0; running = false; busy = false; sprintExpired=false; profile.runs=(profile.runs||0)+1; saveProfile();
     $("clicks").textContent = "0"; $("timer").textContent = fmt(0);
     $("goalTitle").textContent = to;
     var tl = $("targetLink"); tl.href = "https://en.wikipedia.org/wiki/" + encodeURIComponent(to.replace(/ /g,"_"));
@@ -210,6 +217,7 @@
   function finish(){
     stopClock(); cancelAnimationFrame(raf);
     var ms = elapsed();
+    profile.wins=(profile.wins||0)+1;profile.clicks=(profile.clicks||0)+clicks;profile.bestMs=profile.bestMs==null?Math.round(ms):Math.min(profile.bestMs,Math.round(ms));saveProfile();
     sendProg(true,false);
     $("timer").textContent = fmt(ms);
     $("winTime").textContent = fmt(ms);
@@ -265,7 +273,7 @@
 
   /* ---------- party (peer-to-peer via PeerJS, no server needed) ---------- */
   var party = null;
-  function myName(){ var n = $("partyName").value.trim().slice(0,16); return n || ("Player" + (10+Math.floor(Math.random()*90))); }
+  function myName(){ var n = ($("partyName").value.trim() || profile.name || "").slice(0,16); return n || ("Player" + (10+Math.floor(Math.random()*90))); }
   function setPartyMsg(m){ $("partyMsg").textContent = m || ""; }
   function plist(){ return party ? Object.keys(party.players).map(function(k){ return party.players[k]; }) : []; }
   function broadcast(m){ Object.keys(party.conns).forEach(function(id){ try{ party.conns[id].send(m); }catch(e){} }); }
@@ -280,7 +288,7 @@
     function r(p){ return p.done ? 0 : (p.gaveUp ? 2 : 1); }
     return list.slice().sort(function(a,b){
       if(r(a)!==r(b)) return r(a)-r(b);
-      return r(a)===0 ? a.ms-b.ms : a.clicks-b.clicks;
+      return r(a)===0 ? (mode==="fewest" ? a.clicks-b.clicks || a.ms-b.ms : a.ms-b.ms || a.clicks-b.clicks) : a.clicks-b.clicks;
     });
   }
   function fillBoard(ol, list, withStatus){
@@ -318,6 +326,7 @@
     });
   }
   function leaveParty(keepMsg){
+    joining=false; $("joinBtn").disabled=false;
     if(party){ try{ party.peer.destroy(); }catch(e){} party = null; }
     if(!keepMsg) setPartyMsg("");
     if(!$("game").classList.contains("hidden")) home();
@@ -325,13 +334,14 @@
   }
   function hostStart(){
     Object.keys(party.players).forEach(function(k){ var q = party.players[k]; q.clicks = 0; q.done = false; q.gaveUp = false; q.ms = 0; });
-    broadcast({t:"start", from:from, to:to});
+    broadcast({t:"start", from:from, to:to, mode:mode});
     pushPlayers();
   }
   function newCode(){ var a = "ABCDEFGHJKLMNPQRSTUVWXYZ", s = ""; for(var i=0;i<4;i++) s += a[Math.floor(Math.random()*a.length)]; return s; }
 
   function createParty(tries){
     if(typeof Peer === "undefined"){ setPartyMsg("Party mode could not load. Check your connection and refresh."); return; }
+    if(party || joining) return;
     var c = newCode(), name = myName();
     var peer = new Peer("rabbit-hole-" + c);
     var p = party = {isHost:true, code:c, peer:peer, conns:{}, players:{}, me:null};
@@ -342,7 +352,7 @@
     });
     peer.on("connection", function(conn){
       conn.on("data", function(m){
-        if(m.t==="join"){
+        if(m.t==="join" && party===p){
           p.conns[conn.peer] = conn;
           p.players[conn.peer] = {id:conn.peer, name:String(m.name||"Player").slice(0,16), clicks:0, done:false, gaveUp:false, ms:0};
           pushPlayers();
@@ -362,8 +372,10 @@
 
   function joinParty(){
     var c = $("joinCode").value.trim().toUpperCase();
+    if(party || joining) return;
     if(c.length !== 4){ setPartyMsg("Enter the 4-letter party code."); return; }
     if(typeof Peer === "undefined"){ setPartyMsg("Party mode could not load. Check your connection and refresh."); return; }
+    joining = true; $("joinBtn").disabled=true;
     var name = myName(), peer = new Peer(), opened = false;
     var p = party = {isHost:false, code:c, peer:peer, conns:{}, players:{}, me:null, hostConn:null};
     setPartyMsg("Joining…");
@@ -371,10 +383,10 @@
     peer.on("open", function(id){
       p.me = id;
       var conn = p.hostConn = peer.connect("rabbit-hole-" + c, {reliable:true});
-      conn.on("open", function(){ opened = true; clearTimeout(tmo); setPartyMsg(""); conn.send({t:"join", name:name}); renderLobby(); });
+      conn.on("open", function(){ opened = true; joining=false; $("joinBtn").disabled=false; clearTimeout(tmo); setPartyMsg(""); conn.send({t:"join", name:name}); renderLobby(); });
       conn.on("data", function(m){
         if(m.t==="players"){ p.players = {}; m.list.forEach(function(x){ p.players[x.id] = x; }); renderLobby(); renderBoard(); }
-        else if(m.t==="start"){ from = m.from; to = m.to; startRun(); }
+        else if(m.t==="start"){ from = m.from; to = m.to; mode=m.mode||"classic";$("gameMode").value=mode; startRun(); }
       });
       conn.on("close", function(){ if(party===p){ setPartyMsg("The host left the party."); leaveParty(true); } });
     });
@@ -532,5 +544,5 @@
   var qs = new URLSearchParams(location.search);
   if(qs.get("from") && qs.get("to")){ $("fromIn").value = qs.get("from"); $("toIn").value = qs.get("to"); updateBest(); }
   else randomRoute();
-  if(qs.get("party")){ $("joinCode").value = qs.get("party").toUpperCase().slice(0,4); $("partyName").focus(); }
+  if(qs.get("party")){ $("joinCode").value = qs.get("party").toUpperCase().slice(0,4); setTimeout(joinParty,350); }
 })();
