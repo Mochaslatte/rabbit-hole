@@ -10,13 +10,20 @@
 </head>
 <body>
 
-<div class="top"><span class="logo">Rabbit Hole</span><span class="logo"><small>the free speedrun game, built on Wikipedia</small></span><label class="theme-control" for="themeSelect">Appearance <select id="themeSelect" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div>
+<div class="top"><span class="logo">Rabbit Hole</span><span class="logo"><small>the free speedrun game, built on Wikipedia</small></span><label class="theme-control" for="themeSelect">Appearance <select id="themeSelect" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><button class="btn small" id="helpBtn" type="button">How to play</button></div>
 
 <div class="gbar hidden" id="gbar">
   <div class="big" id="timer">0:00.00</div>
   <div class="k">Clicks<b id="clicks">0</b></div>
   <div class="goal">Get to<b id="goalTitle"></b></div>
   <button class="btn danger" id="quitBtn">Give up</button>
+</div>
+
+<div class="gbar hidden" id="specBar">
+  <div class="k">Spectating<b id="specName"></b></div>
+  <div class="k">Their clicks<b id="specClicks">0</b></div>
+  <label class="k" for="specSel">Watch<select id="specSel"></select></label>
+  <button class="btn" id="specStop">Stop spectating</button>
 </div>
 
 <div class="page">
@@ -30,6 +37,15 @@
       <h3>Players</h3>
       <ol class="log" id="board"></ol>
     </div>
+    <div class="panel chat hidden" id="chatPanel">
+      <h3>Party chat</h3>
+      <ol class="chatlog" id="chatLog" aria-live="polite"></ol>
+      <div class="chatrow">
+        <input type="text" id="chatIn" maxlength="140" placeholder="Say something" autocomplete="off" aria-label="Chat message">
+        <button class="btn small" id="chatSend" type="button">Send</button>
+      </div>
+      <p class="chatnote">Plain text only. Bad words are censored.</p>
+    </div>
     <div class="panel hint hidden" id="targetPanel">
       <h3>Target</h3>
       <p><a id="targetLink" target="_blank" rel="noopener">Read about the target</a><br><span style="color:var(--muted)">Opens in a new tab. The clock keeps running.</span></p>
@@ -37,7 +53,6 @@
   </aside>
 
   <main>
-    <!-- setup -->
     <section class="setup" id="setup">
       <h1 class="firstHeading">Rabbit Hole</h1>
       <p class="lead"><b>Rabbit Hole</b> is a game where you travel from one Wikipedia article to another using only the links inside the articles. Reach the target with the <b>fewest clicks</b> and the <b>fastest time</b>.</p>
@@ -62,29 +77,50 @@
       <div class="form" id="partyBox">
         <label>Play with friends</label>
         <div id="partyCreate">
-          <div class="field" style="margin-bottom:10px"><input type="text" id="partyName" maxlength="16" placeholder="Your name" autocomplete="off"></div>
+          <div class="field" style="margin-bottom:10px"><input type="text" id="partyName" maxlength="16" placeholder="Your name" autocomplete="off" aria-label="Your name"></div>
           <div class="row">
             <button class="btn" id="createBtn">Create a party</button>
             <span style="color:var(--muted)">or join:</span>
-            <input type="text" id="joinCode" maxlength="4" placeholder="CODE" autocomplete="off" style="width:84px;text-transform:uppercase">
+            <input type="text" id="joinCode" maxlength="5" placeholder="CODE" autocomplete="off" aria-label="Party code" style="width:96px;text-transform:uppercase">
             <button class="btn" id="joinBtn">Join</button>
           </div>
         </div>
+        <div id="joining" class="hidden">
+          <p id="joinStatus" style="margin:0 0 8px"></p>
+          <button class="btn" id="cancelJoinBtn">Cancel</button>
+        </div>
         <div id="lobby" class="hidden">
-          <p style="margin:0 0 6px">Party code <b id="pcode" style="font-family:var(--serif);font-size:26px;letter-spacing:3px;margin-left:6px"></b></p>
+          <p style="margin:0 0 6px">Party code <b id="pcode" style="font-family:var(--serif);font-size:26px;letter-spacing:3px;margin-left:6px"></b><span class="chip" id="pstate"></span></p>
           <div class="row"><button class="btn" id="inviteBtn">Copy invite link</button><button class="btn danger" id="leaveBtn">Leave party</button></div>
-          <h3 style="margin:14px 0 4px;font-size:14px">Players</h3>
+          <div id="hostCtl" class="hostctl hidden">
+            <label class="chk"><input type="checkbox" id="optApprove"> Approve people who join with just the code</label>
+            <label class="chk"><input type="checkbox" id="optLock"> Lock the party</label>
+            <label class="chk" for="optMax">Max players <select id="optMax"></select></label>
+          </div>
+          <div id="requests" class="hidden">
+            <h3 style="margin:14px 0 4px;font-size:14px">Join requests</h3>
+            <ol class="log" id="reqList"></ol>
+          </div>
+          <h3 style="margin:14px 0 4px;font-size:14px">Players <span id="pcount"></span></h3>
           <ol class="log" id="lobbyList"></ol>
+          <div class="row" style="margin-top:10px">
+            <input type="text" id="renameIn" maxlength="16" placeholder="Change your name" autocomplete="off" aria-label="Change your name" style="width:170px">
+            <button class="btn small" id="renameBtn" type="button">Rename</button>
+          </div>
+          <div id="guestCtl" class="row hidden" style="margin-top:10px"><button class="btn primary" id="readyBtn">I'm ready</button></div>
           <p id="wait" class="hidden" style="font-weight:700">Waiting for the host to start the round…</p>
+          <p id="readyNote" class="hidden" style="color:var(--muted);margin:8px 0 0"></p>
         </div>
         <p class="err" id="partyMsg" style="margin:8px 0 0"></p>
       </div>
       <p class="tips">Type any article name and pick a suggestion, or press Random route. Only blue links inside the article text count. The timer pauses while pages load. Challenge a friend: after a run, copy the challenge link and they get the same route.</p>
     </section>
 
-    <!-- game -->
     <section class="hidden" id="game">
-      <div class="artwrap"><div id="article"></div></div>
+      <div class="artwrap">
+        <div id="article"></div>
+        <div id="specCursor" class="cursor hidden"><i></i><span id="specCursorName"></span></div>
+      </div>
       <p style="color:var(--muted);font-size:12px;margin-top:30px;border-top:1px solid var(--soft);padding-top:8px">Text from <a href="https://www.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a>, available under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>.</p>
     </section>
     <footer class="site-credits" aria-label="Credits">
@@ -112,6 +148,7 @@
     <div class="row" style="margin-top:16px">
       <button class="btn primary" id="shareBtn">Copy result</button>
       <button class="btn" id="linkBtn">Copy challenge link</button>
+      <button class="btn" id="specBtn">Spectate a player</button>
       <button class="btn" id="showSolveBtn">Show shortest route</button>
       <button class="btn" id="againBtn">Play again</button>
     </div>
@@ -124,12 +161,36 @@
     <p id="solveYou" style="margin:4px 0"></p>
     <p id="solveStatus" style="font-weight:700"></p>
     <ol class="log" id="solveList"></ol>
-    <div class="row" style="margin-top:16px"><button class="btn primary" id="solveBack">Back to menu</button></div>
+    <div id="solveStandings" class="hidden">
+      <h3 style="margin:14px 0 4px;font-size:14px">Party standings</h3>
+      <ol class="log" id="solveStandingsList"></ol>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <button class="btn" id="specBtn2">Spectate a player</button>
+      <button class="btn primary" id="solveBack">Back to menu</button>
+    </div>
+  </div>
+</div>
+
+<div class="win tutwin hidden" id="tut" role="dialog" aria-modal="true" aria-labelledby="tutTitle">
+  <div class="card tutcard">
+    <div class="tutstep" id="tutStep"></div>
+    <h2 id="tutTitle"></h2>
+    <div id="tutBody"></div>
+    <div class="dots" id="tutDots"></div>
+    <div class="row">
+      <button class="btn" id="tutSkip" type="button">Skip</button>
+      <span class="grow"></span>
+      <button class="btn" id="tutBack" type="button">Back</button>
+      <button class="btn primary" id="tutNext" type="button">Next</button>
+    </div>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <script src="./js/settings.js"></script>
+<script src="./js/filter.js"></script>
 <script src="./js/game.js"></script>
+<script src="./js/tutorial.js"></script>
 </body>
 </html>
