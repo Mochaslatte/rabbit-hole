@@ -30,6 +30,8 @@ No installation is needed to play: open the site in your browser and start a run
 4. Reach the target and compare your time and number of clicks.
 5. Challenge friends to try the same route.
 
+First time playing? A short tutorial opens automatically. Press **How to play** in the header to see it again.
+
 > **Tip:** The game timer pauses while articles load, so the run measures navigation time rather than network delays.
 
 ## FEATURES
@@ -41,11 +43,23 @@ No installation is needed to play: open the site in your browser and start a run
 | Click counter and log | See how many links you've followed and the route you've taken. |
 | Random routes | Generate a new start and target from a curated pool. |
 | Personal bests | Save your best time for each route in your browser. |
-| Multiplayer parties | Create or join peer-to-peer parties to race friends. |
+| Multiplayer parties | Create or join peer-to-peer parties of up to 8 players to race friends. |
+| Party controls | The host can approve join requests, lock the party, set a player limit and remove players. |
+| Invite links | A link with a secret key lets friends in instantly. People who only type the code need host approval. |
+| Spectating | Once you finish a round you can watch any player who is still racing, including their mouse cursor. |
+| Party chat | A chat box on the left. Messages are plain text and bad words are censored. |
+| Tutorial | A short walkthrough for first-time players. |
 | Challenge links | Share the same start and target with someone else. |
 | Route finder | After a run, search for a short route between articles. |
 | Appearance settings | Choose a light or dark interface, where supported by the current build. |
 
+
+## PARTY SAFETY
+
+- **One slot per browser tab.** Clicking Join repeatedly, or reconnecting, never adds extra players. A second connection from the same tab replaces the first.
+- **Rate limits.** The host limits join attempts overall and per tab, caps the number of waiting requests, limits name changes to one every 10 seconds and limits chat bursts.
+- **Names are checked.** Names are trimmed, limited to 16 characters, censored and made unique inside a party.
+- **Plain text only.** Names and chat are shown as text, never as markup. There is no server and no database: parties are direct peer-to-peer connections, and only your best times and display name are kept in your browser.
 
 ## RUN LOCALLY
 
@@ -69,7 +83,7 @@ Then open `http://localhost:8000` in your browser.
 
 - **HTML5** — page structure
 - **CSS3** — styling and responsive layout
-- **JavaScript** — gameplay, navigation, and browser storage
+- **JavaScript** — gameplay, parties, chat, spectating, tutorial and browser storage (`js/game.js`, `js/filter.js`, `js/tutorial.js`, `js/settings.js`)
 - **Wikipedia / MediaWiki API** — article search and content
 - **PeerJS** — peer-to-peer multiplayer connections
 - **GitHub Pages** — static site hosting
