@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy – Rabbit Hole</title>
+<meta name="description" content="How Rabbit Hole handles your data.">
+<link rel="icon" type="image/png" href="./assets/favicon.png">
+<link rel="stylesheet" href="./css/style.css">
+<link rel="stylesheet" href="./css/themes.css">
+<script>(function(){var m="system";try{m=localStorage.getItem("rabbit-hole:theme")||"system";}catch(e){}var d=m==="dark"||(m!=="light"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.setAttribute("data-theme",d?"dark":"light");})();</script>
+</head>
+<body>
+<div class="top"><a class="logo" href="./index.html">Rabbit Hole</a><a href="./index.html">Back to the game</a></div>
+<main class="doc">
+<h1 class="firstHeading">Privacy Policy</h1>
+<p class="meta">Last updated: November 4, 2026</p>
+
+<h2>The short version</h2>
+<ul>
+<li>Rabbit Hole has no accounts, no passwords, no ads, no analytics and no tracking cookies.</li>
+<li>The game has no server or database of its own. Your profile, stats and settings are stored only in your browser.</li>
+<li>In a party, the other players can see your username, your chat messages and your progress, and may be able to see your IP address (see below).</li>
+<li>A few third-party services are needed to load and run the game. They are listed below.</li>
+</ul>
+
+<h2>What is stored on your device</h2>
+<p>Rabbit Hole saves the following in your browser's local storage. It never leaves your device unless noted in the next section.</p>
+<ul>
+<li><b>Profiles</b> (<code>rabbit-hole:profiles</code>): your usernames, stats, recent runs and personal best times.</li>
+<li><b>Appearance</b> (<code>rabbit-hole:theme</code>): light, dark or system.</li>
+<li><b>Tutorial</b> (<code>rabbit-hole:tutorial</code>): whether you have seen the how-to-play guide.</li>
+<li><b>Home page</b> (<code>rabbit-hole:home</code>): the address of the game, used by the 404 page to link back.</li>
+<li><b>Admin key</b> (<code>rabbit-hole:adminkey</code>): only if you are a site administrator and chose to generate or import one.</li>
+<li><b>Older best times</b>: earlier versions of the game saved best times as separate entries whose names start with <code>rabbit-hole:</code>. These are copied into your profile and may remain until you clear the site data.</li>
+<li><b>Tab identifier</b> (<code>rabbit-hole:token</code>, session storage): a random value that lasts until you close the tab. Party hosts use it to make sure one tab only takes one player slot.</li>
+</ul>
+<p>The game does not set cookies.</p>
+
+<h2>What other players can see</h2>
+<p>Parties are direct connections between players' browsers, and the person who creates a party (the host) relays messages. While you are in a party, the host and the other players can see:</p>
+<ul>
+<li>your username, and whether you are the host or a verified administrator;</li>
+<li>your chat messages, and any emoji reactions you send;</li>
+<li>whether you are ready, which article you are on, your click count, your time and whether you finished or gave up;</li>
+<li>your mouse or finger position on the article, but only while another player is spectating you.</li>
+</ul>
+<p>Direct browser-to-browser connections (WebRTC) can reveal your IP address to the people you connect with, and to the connection services described below. If you do not want this, do not join parties.</p>
+<p>Party chat and activity are not stored by the game. They disappear when the party ends or the page is closed, although other players or a host could copy what they see. Please do not share personal information in your username or in chat.</p>
+
+<h2>Third-party services</h2>
+<p>These services receive standard connection information (such as your IP address and browser details) when your browser contacts them. Their own policies apply.</p>
+<ul>
+<li><b>GitHub Pages</b> hosts the website and may keep server logs. See the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">GitHub privacy statement</a>.</li>
+<li><b>cdnjs (Cloudflare)</b> delivers the PeerJS library that powers parties. See <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare's privacy policy</a>.</li>
+<li><b>PeerJS</b> provides a connection broker so players can find each other. It sees the temporary party code and the connection details needed to link browsers, and the connection may use public STUN or relay servers. See <a href="https://peerjs.com/" target="_blank" rel="noopener">peerjs.com</a>.</li>
+<li><b>Wikipedia and Wikimedia</b> supply the articles and the search suggestions. Your browser contacts them directly while you play. See the <a href="https://foundation.wikimedia.org/wiki/Policy:Privacy_policy" target="_blank" rel="noopener">Wikimedia privacy policy</a>.</li>
+</ul>
+
+<h2>What we do not do</h2>
+<ul>
+<li>We do not sell, rent or share your data, because we do not collect it on any server.</li>
+<li>We do not run analytics, advertising or profiling.</li>
+<li>We cannot read your party chat or your profile.</li>
+</ul>
+
+<h2>Administrators</h2>
+<p>An administrator proves who they are by signing a random challenge with a private key that stays on their own device. Only the matching public key is published in the game's code. When an administrator joins a party, the other players can see a star next to their name.</p>
+
+<h2>Your choices and deleting your data</h2>
+<ul>
+<li>Open <b>Profile</b> in the game to change your username, reset your stats, or delete a profile.</li>
+<li>Clear this site's data in your browser settings to remove everything the game has stored.</li>
+<li>Leave a party at any time with the <b>Leave party</b> button, or close the tab.</li>
+</ul>
+<p>Because the game keeps no personal data on any server, there is generally nothing for the operator to access, correct or delete for you. If you live where laws such as the GDPR or CCPA apply, you can still contact us with questions, and you can contact the third-party services above about the data they handle.</p>
+
+<h2>Children</h2>
+<p>Rabbit Hole is a general-audience game and is not directed at children under 13. If you are a parent or guardian and think a child has shared personal information in a username or chat, tell the party host or contact us and stop using the game.</p>
+
+<h2>Changes</h2>
+<p>If this policy changes, the date at the top will change. Continuing to use the game after a change means you accept the updated policy.</p>
+
+<h2>Contact</h2>
+<p>Questions about this policy can be sent through the developer's page on GitHub: <a href="https://github.com/Mochaslatte" target="_blank" rel="noopener">github.com/Mochaslatte</a>.</p>
+
+<p class="legal-links"><a href="./index.html">Play</a> · <a href="./terms.html">Terms of Service</a></p>
+</main>
+</body>
+</html>

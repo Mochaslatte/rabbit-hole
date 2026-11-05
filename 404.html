@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Page not found – Rabbit Hole</title>
+<style>
+:root{--bg:#f6f6f6;--paper:#fff;--text:#202122;--muted:#54595d;--border:#a2a9b1;--link:#0645ad;--blue:#36c;--box:#f8f9fa}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#15191f;--paper:#20262e;--text:#e8edf2;--muted:#b2bdc9;--border:#4b5867;--link:#8bbcff;--blue:#6199f7;--box:#29323c}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Lato,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+a{color:var(--link)}
+.card{background:var(--paper);border:1px solid var(--border);max-width:520px;width:100%;padding:28px 26px;text-align:center}
+.code{font-family:"Linux Libertine",Georgia,Times,serif;font-size:clamp(64px,22vw,110px);line-height:1;margin:0;color:var(--blue)}
+h1{font-family:"Linux Libertine",Georgia,Times,serif;font-weight:400;font-size:clamp(24px,6vw,30px);margin:6px 0 10px;line-height:1.25}
+p{margin:0 0 12px}
+.path{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;color:var(--muted);background:var(--box);border:1px solid var(--border);padding:6px 10px;overflow-wrap:anywhere}
+.btn{display:inline-block;margin:14px 0 4px;background:var(--blue);color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:2px;min-height:44px}
+.btn:hover{opacity:.9}
+.links{font-size:13px;color:var(--muted);margin-top:14px}
+</style>
+<script>(function(){var m="system";try{m=localStorage.getItem("rabbit-hole:theme")||"system";}catch(e){}var d=m==="dark"||(m!=="light"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.setAttribute("data-theme",d?"dark":"light");})();</script>
+</head>
+<body>
+<main class="card">
+<p class="code" aria-hidden="true">404</p>
+<h1>You fell down the wrong rabbit hole</h1>
+<p>There is no page at this address. It may have moved, or the link may be mistyped.</p>
+<p class="path" id="missing"></p>
+<a class="btn" id="home" href="/">Back to the game</a>
+<p class="links"><a id="terms" href="/terms.html">Terms of Service</a> · <a id="privacy" href="/privacy.html">Privacy Policy</a></p>
+</main>
+<script>
+(function(){
+  var base = "/";
+  try {
+    var saved = localStorage.getItem("rabbit-hole:home");
+    if(saved && /^\/[A-Za-z0-9_\-.~\/]*$/.test(saved) && saved.indexOf("//") < 0) base = saved;
+    else if(/\.github\.io$/.test(location.hostname)){
+      var seg = location.pathname.split("/").filter(Boolean)[0];
+      if(seg && seg.indexOf(".") < 0) base = "/" + seg + "/";
+    }
+  } catch(e){}
+  if(base.charAt(base.length - 1) !== "/") base += "/";
+  document.getElementById("home").href = base;
+  document.getElementById("terms").href = base + "terms.html";
+  document.getElementById("privacy").href = base + "privacy.html";
+  document.getElementById("missing").textContent = location.pathname;
+})();
+</script>
+</body>
+</html>
