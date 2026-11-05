@@ -1,3 +1,5 @@
+window.ADMIN_PUBLIC_KEYS = [];
+
 (function(){
   var RH = window.RH = window.RH || {};
 
@@ -61,10 +63,383 @@
 })();
 
 (function(){
+  var RH = window.RH = window.RH || {};
+  var $ = function(id){ return document.getElementById(id); };
+  var KEY = "rabbit-hole:profiles", KEY_STORE = "rabbit-hole:adminkey";
+  var NAME_GAP = 10000, MAX_PROFILES = 8;
+  var ADMIN_KEYS = (Array.isArray(window.ADMIN_PUBLIC_KEYS) ? window.ADMIN_PUBLIC_KEYS : []).filter(function(k){ return typeof k === "string" && k.length > 20; });
+  var subtle = window.crypto && window.crypto.subtle;
+  var ECDSA = { name: "ECDSA", namedCurve: "P-256" }, SIG = { name: "ECDSA", hash: "SHA-256" };
+  var db = null, listeners = [], lastNameChange = 0, opener = null;
+
+  function toB64(bytes){ var s = ""; for(var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return btoa(s); }
+  function fromB64(s){ var b = atob(s), a = new Uint8Array(b.length); for(var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+  function fromB64u(s){ s = String(s).replace(/-/g, "+").replace(/_/g, "/"); while(s.length % 4) s += "="; return fromB64(s); }
+  function pubOf(jwk){
+    var x = fromB64u(jwk.x), y = fromB64u(jwk.y);
+    if(x.length !== 32 || y.length !== 32) throw new Error("bad key");
+    var raw = new Uint8Array(65); raw[0] = 4; raw.set(x, 1); raw.set(y, 33);
+    return toB64(raw);
+  }
+  function validJwk(j){ return !!j && j.kty === "EC" && j.crv === "P-256" && typeof j.x === "string" && typeof j.y === "string" && typeof j.d === "string"; }
+  function cleanJwk(j){ return { kty: "EC", crv: "P-256", x: j.x, y: j.y, d: j.d }; }
+  function readKey(){
+    try {
+      var j = JSON.parse(localStorage.getItem(KEY_STORE) || "null");
+      if(validJwk(j)) return { jwk: j, pub: pubOf(j) };
+    } catch(e){}
+    return null;
+  }
+  function keep(j){ try { localStorage.setItem(KEY_STORE, JSON.stringify(j)); } catch(e){} }
+
+  var admin = RH.admin = {
+    supported: function(){ return !!subtle; },
+    configured: function(){ return ADMIN_KEYS.length > 0; },
+    listed: function(pub){ return typeof pub === "string" && ADMIN_KEYS.indexOf(pub) >= 0; },
+    hasKey: function(){ return !!readKey(); },
+    pub: function(){ var k = readKey(); return k ? k.pub : ""; },
+    active: function(){ var k = readKey(); return !!(subtle && k && ADMIN_KEYS.indexOf(k.pub) >= 0); },
+    nonce: function(){ var a = new Uint8Array(16); window.crypto.getRandomValues(a); return toB64(a); },
+    sign: function(msg){
+      return Promise.resolve().then(function(){
+        var k = readKey();
+        if(!k || !subtle) throw new Error("no key");
+        return subtle.importKey("jwk", k.jwk, ECDSA, false, ["sign"]).then(function(key){
+          return subtle.sign(SIG, key, new TextEncoder().encode(msg));
+        });
+      }).then(function(sig){ return toB64(new Uint8Array(sig)); });
+    },
+    verify: function(pub, msg, sig){
+      if(!subtle || !admin.listed(pub) || typeof sig !== "string" || sig.length > 200) return Promise.resolve(false);
+      return Promise.resolve().then(function(){
+        return subtle.importKey("raw", fromB64(pub), ECDSA, false, ["verify"]).then(function(key){
+          return subtle.verify(SIG, key, fromB64(sig), new TextEncoder().encode(msg));
+        });
+      }).catch(function(){ return false; });
+    },
+    generate: function(){
+      return Promise.resolve().then(function(){
+        if(!subtle) throw new Error("Admin keys need a secure page (https or localhost).");
+        return subtle.generateKey(ECDSA, true, ["sign", "verify"]);
+      }).then(function(k){ return subtle.exportKey("jwk", k.privateKey); }).then(function(j){
+        var c = cleanJwk(j);
+        keep(c);
+        return { pub: pubOf(c), text: JSON.stringify(c) };
+      });
+    },
+    importText: function(text){
+      var c, pub;
+      return Promise.resolve().then(function(){
+        if(!subtle) throw new Error("Admin keys need a secure page (https or localhost).");
+        var j = JSON.parse(text);
+        if(!validJwk(j)) throw new Error("That is not a Rabbit Hole admin key file.");
+        c = cleanJwk(j); pub = pubOf(c);
+        return subtle.importKey("jwk", c, ECDSA, false, ["sign"]);
+      }).then(function(key){
+        var data = new TextEncoder().encode("self-test");
+        return subtle.sign(SIG, key, data).then(function(sig){
+          return subtle.importKey("raw", fromB64(pub), ECDSA, false, ["verify"]).then(function(pk){
+            return subtle.verify(SIG, pk, sig, data);
+          });
+        });
+      }).then(function(good){
+        if(!good) throw new Error("That key file is damaged.");
+        keep(c);
+        return pub;
+      });
+    },
+    clear: function(){ try { localStorage.removeItem(KEY_STORE); } catch(e){} }
+  };
+
+  var RESERVED = /(admin|moderator|^mods?$|staff|official|system)/;
+  RH.reserved = function(n){ return RESERVED.test(String(n || "").toLowerCase().replace(/[^a-z0-9]/g, "")); };
+  RH.checkUsername = function(n){
+    if(!n || n.length < 3 || n.length > 16) return "Usernames are 3 to 16 characters.";
+    if(!/^[A-Za-z0-9][A-Za-z0-9 _\-]*$/.test(n)) return "Use letters, numbers, spaces, - and _ only.";
+    if(RH.censor(n) !== n) return "That username is not allowed.";
+    if(RH.reserved(n) && !admin.active()) return "That username is reserved.";
+    return "";
+  };
+
+  function norm(t){ return (t || "").replace(/_/g, " ").trim().toLowerCase(); }
+  function routeKey(f, t){ return norm(f) + ">" + norm(t); }
+  function uid(){ return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function randName(){ return "Player" + (10 + Math.floor(Math.random() * 90)); }
+
+  function blank(name){
+    return {
+      id: uid(), name: name || randName(), created: Date.now(),
+      stats: { played: 0, finished: 0, totalClicks: 0, totalMs: 0, partyRaces: 0, partyWins: 0, bestMs: null, bestClicks: null },
+      history: [], bests: {}
+    };
+  }
+
+  function legacyBests(){
+    var out = {};
+    try {
+      for(var i = 0; i < localStorage.length; i++){
+        var k = localStorage.key(i);
+        if(!k || k.indexOf("rabbit-hole:") !== 0 || k.indexOf(">") < 0) continue;
+        var v = JSON.parse(localStorage.getItem(k));
+        if(v && isFinite(v.ms) && isFinite(v.clicks)) out[k.slice(12)] = { ms: v.ms | 0, clicks: v.clicks | 0 };
+      }
+    } catch(e){}
+    return out;
+  }
+
+  function load(){
+    var v = null;
+    try { v = JSON.parse(localStorage.getItem(KEY) || "null"); } catch(e){}
+    if(v && v.list && typeof v.list === "object" && Object.keys(v.list).length){
+      Object.keys(v.list).forEach(function(id){
+        var p = v.list[id], b = blank();
+        p.id = id;
+        p.name = RH.cleanName(p.name);
+        if(RH.checkUsername(p.name)) p.name = b.name;
+        p.stats = Object.assign(b.stats, p.stats || {});
+        p.history = Array.isArray(p.history) ? p.history.slice(0, 30) : [];
+        p.bests = p.bests && typeof p.bests === "object" ? p.bests : {};
+      });
+      if(!v.list[v.current]) v.current = Object.keys(v.list)[0];
+      return v;
+    }
+    var first = blank(), old = null;
+    try { old = RH.cleanName(localStorage.getItem("rabbit-hole:name")); } catch(e){}
+    if(old && !RH.checkUsername(old)) first.name = old;
+    first.bests = legacyBests();
+    var o = { v: 1, current: first.id, list: {} };
+    o.list[first.id] = first;
+    return o;
+  }
+
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(db)); } catch(e){} }
+  function cur(){ return db.list[db.current]; }
+  function emit(kind){ listeners.forEach(function(fn){ try { fn(kind, cur()); } catch(e){} }); }
+
+  var P = RH.profiles = {};
+  P.current = function(){ return cur(); };
+  P.onChange = function(fn){ listeners.push(fn); };
+  P.busy = null;
+  P.bestFor = function(f, t){ return cur().bests[routeKey(f, t)] || null; };
+
+  P.setName = function(raw){
+    var n = RH.cleanName(raw), now = Date.now();
+    if(n === cur().name) return { ok: true };
+    var why = RH.checkUsername(n);
+    if(why) return { ok: false, msg: why };
+    var dup = Object.keys(db.list).some(function(id){ return id !== db.current && db.list[id].name.toLowerCase() === n.toLowerCase(); });
+    if(dup) return { ok: false, msg: "You already have a profile with that username." };
+    if(lastNameChange && now - lastNameChange < NAME_GAP){
+      return { ok: false, msg: "Wait " + Math.ceil((NAME_GAP - (now - lastNameChange)) / 1000) + " seconds before changing your username again." };
+    }
+    cur().name = n; lastNameChange = now;
+    save(); paintAll(); emit("name");
+    return { ok: true };
+  };
+
+  P.recordRun = function(r){
+    var p = cur(), s = p.stats, res = { newTime: false, newClicks: false };
+    s.played++;
+    if(r.party) s.partyRaces++;
+    if(r.outcome === "done"){
+      s.finished++; s.totalClicks += r.clicks; s.totalMs += r.ms;
+      var k = routeKey(r.from, r.to), b = p.bests[k];
+      if(!b){ p.bests[k] = { ms: r.ms, clicks: r.clicks }; res.newTime = res.newClicks = true; }
+      else {
+        if(r.ms < b.ms){ b.ms = r.ms; res.newTime = true; }
+        if(r.clicks < b.clicks){ b.clicks = r.clicks; res.newClicks = true; }
+      }
+      if(!s.bestMs || r.ms < s.bestMs.ms) s.bestMs = { ms: r.ms, from: r.from, to: r.to };
+      if(!s.bestClicks || r.clicks < s.bestClicks.clicks) s.bestClicks = { clicks: r.clicks, from: r.from, to: r.to };
+    }
+    p.history.unshift({ t: Date.now(), from: r.from, to: r.to, outcome: r.outcome, ms: r.ms, clicks: r.clicks, party: !!r.party });
+    p.history.length = Math.min(p.history.length, 30);
+    save(); paintAll(); emit("stats");
+    return res;
+  };
+
+  P.recordPartyWin = function(){ cur().stats.partyWins++; save(); paintAll(); emit("stats"); };
+
+  function stat(label, value, sub){
+    var d = document.createElement("div"); d.className = "stat";
+    var b = document.createElement("b"); b.textContent = value;
+    var l = document.createElement("span"); l.textContent = label;
+    d.appendChild(b); d.appendChild(l);
+    if(sub){ var s = document.createElement("small"); s.textContent = sub; d.appendChild(s); }
+    return d;
+  }
+
+  function paintHeader(){ $("profileBtn").textContent = cur().name + (admin.active() ? " \u2605" : ""); }
+
+  function adminText(){
+    if(!admin.supported()) return "Admin keys need a secure page (https or localhost).";
+    if(!admin.configured()) return "No admin public key is set in js/game.js yet. Generate a key below, then paste its public key into ADMIN_PUBLIC_KEYS at the top of js/game.js.";
+    if(admin.active()) return "Admin mode is on. Hosts verify you automatically when you join a party.";
+    if(admin.hasKey()) return "This device has a key, but its public key is not in the admin list.";
+    return "No admin key on this device. Import your key file to become an admin here.";
+  }
+
+  function paintDialog(){
+    var p = cur(), s = p.stats;
+    if($("profName") !== document.activeElement) $("profName").value = p.name;
+    var g = $("statGrid"); g.innerHTML = "";
+    g.appendChild(stat("Runs finished", s.finished + " / " + s.played));
+    g.appendChild(stat("Avg clicks", s.finished ? (s.totalClicks / s.finished).toFixed(1) : "\u2013"));
+    g.appendChild(stat("Avg time", s.finished ? RH.fmt(s.totalMs / s.finished) : "\u2013"));
+    g.appendChild(stat("Party wins", s.partyWins + " / " + s.partyRaces));
+    g.appendChild(stat("Best time", s.bestMs ? RH.fmt(s.bestMs.ms) : "\u2013", s.bestMs ? s.bestMs.from + " \u2192 " + s.bestMs.to : ""));
+    g.appendChild(stat("Fewest clicks", s.bestClicks ? String(s.bestClicks.clicks) : "\u2013", s.bestClicks ? s.bestClicks.from + " \u2192 " + s.bestClicks.to : ""));
+
+    var hl = $("histList"); hl.innerHTML = "";
+    p.history.slice(0, 10).forEach(function(h){
+      var li = document.createElement("li"), t = document.createElement("span"), r = document.createElement("span");
+      t.className = "t"; t.textContent = h.from + " \u2192 " + h.to + (h.party ? " (party)" : "");
+      r.className = "ms"; r.textContent = h.outcome === "done" ? RH.fmt(h.ms) + " \u00b7 " + h.clicks + "c" : "gave up";
+      if(h.outcome === "done") li.className = "goal-hit";
+      li.appendChild(t); li.appendChild(r); hl.appendChild(li);
+    });
+    $("histEmpty").classList.toggle("hidden", p.history.length > 0);
+
+    var pl = $("profList"); pl.innerHTML = "";
+    Object.keys(db.list).forEach(function(id){
+      var q = db.list[id], li = document.createElement("li"), t = document.createElement("span");
+      t.className = "t"; t.textContent = q.name + (id === db.current ? " (current)" : "");
+      li.appendChild(t);
+      if(id !== db.current){
+        var b = document.createElement("button"); b.type = "button"; b.className = "btn small"; b.textContent = "Switch";
+        b.onclick = function(){ if(blocked()) return; db.current = id; save(); paintAll(); emit("switch"); };
+        li.appendChild(b);
+      }
+      pl.appendChild(li);
+    });
+    $("delProfBtn").disabled = Object.keys(db.list).length < 2;
+    $("newProfBtn").disabled = Object.keys(db.list).length >= MAX_PROFILES;
+    $("adminState").textContent = adminText();
+    $("adminOutBtn").classList.toggle("hidden", !admin.hasKey());
+  }
+
+  function paintAll(){ paintHeader(); if(!$("profileDlg").classList.contains("hidden")) paintDialog(); }
+
+  function blocked(){
+    if(P.busy && P.busy()){ $("profMsg").textContent = "Leave the party before switching, adding or deleting profiles."; return true; }
+    $("profMsg").textContent = "";
+    return false;
+  }
+
+  function confirmBtn(btn, label, fn){
+    var armed = false, t;
+    btn.onclick = function(){
+      if(!armed){
+        armed = true; btn.textContent = "Click again to confirm";
+        t = setTimeout(function(){ armed = false; btn.textContent = label; }, 3000);
+        return;
+      }
+      clearTimeout(t); armed = false; btn.textContent = label; fn();
+    };
+  }
+
+  P.open = function(){
+    opener = document.activeElement;
+    $("profMsg").textContent = ""; $("profNameMsg").textContent = ""; $("adminMsg").textContent = "";
+    $("profileDlg").classList.remove("hidden");
+    paintDialog();
+    $("profName").focus();
+  };
+  P.close = function(){
+    $("profileDlg").classList.add("hidden");
+    $("profName").value = cur().name;
+    if(opener && opener.focus) opener.focus();
+  };
+
+  function download(name, text){
+    try {
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+      a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch(e){}
+  }
+
+  db = load(); save(); paintHeader();
+
+  $("profileBtn").onclick = P.open;
+  $("profClose").onclick = P.close;
+  $("profileDlg").addEventListener("mousedown", function(e){ if(e.target === this) P.close(); });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && !$("profileDlg").classList.contains("hidden") && $("tut").classList.contains("hidden")) P.close();
+  });
+  $("profSave").onclick = function(){
+    var r = P.setName($("profName").value);
+    $("profNameMsg").textContent = r.ok ? "Saved." : r.msg;
+  };
+  $("profName").addEventListener("keydown", function(e){ if(e.key === "Enter") $("profSave").click(); });
+  $("newProfBtn").onclick = function(){
+    if(blocked()) return;
+    if(Object.keys(db.list).length >= MAX_PROFILES) return;
+    var p = blank();
+    db.list[p.id] = p; db.current = p.id;
+    save(); paintAll(); emit("switch");
+    $("profName").focus(); $("profName").select();
+  };
+  confirmBtn($("delProfBtn"), "Delete this profile", function(){
+    if(blocked() || Object.keys(db.list).length < 2) return;
+    delete db.list[db.current];
+    db.current = Object.keys(db.list)[0];
+    save(); paintAll(); emit("switch");
+  });
+  confirmBtn($("resetProfBtn"), "Reset stats", function(){
+    var p = cur(), b = blank(p.name);
+    p.stats = b.stats; p.history = []; p.bests = {};
+    save(); paintAll(); emit("stats");
+  });
+
+  $("adminGenBtn").onclick = function(){
+    if(admin.hasKey() && !window.confirm("This replaces the admin key stored on this device. Continue?")) return;
+    $("adminMsg").textContent = "Generating…";
+    admin.generate().then(function(r){
+      $("adminPub").value = r.pub;
+      $("adminPubBox").classList.remove("hidden");
+      download("rabbit-hole-admin-key.json", r.text);
+      $("adminMsg").textContent = "Done. Your private key file was downloaded and saved on this device. Keep it secret and never upload it to GitHub. Paste the public key into js/game.js.";
+      paintAll();
+    }).catch(function(e){ $("adminMsg").textContent = e && e.message ? e.message : "Could not generate a key."; });
+  };
+  $("adminImportBtn").onclick = function(){ $("adminFile").click(); };
+  $("adminFile").addEventListener("change", function(){
+    var f = this.files && this.files[0], input = this;
+    if(!f) return;
+    if(f.size > 4000){ $("adminMsg").textContent = "That file is too large to be an admin key."; input.value = ""; return; }
+    var rd = new FileReader();
+    rd.onload = function(){
+      admin.importText(String(rd.result)).then(function(pub){
+        $("adminPub").value = pub; $("adminPubBox").classList.remove("hidden");
+        $("adminMsg").textContent = "Key imported.";
+        paintAll(); emit("admin");
+      }).catch(function(e){ $("adminMsg").textContent = e && e.message ? e.message : "Could not read that file."; });
+      input.value = "";
+    };
+    rd.readAsText(f);
+  });
+  $("adminOutBtn").onclick = function(){
+    admin.clear(); $("adminPubBox").classList.add("hidden"); $("adminMsg").textContent = "Admin key removed from this device.";
+    paintAll(); emit("admin");
+  };
+  $("adminPubCopy").onclick = function(){
+    var b = this;
+    if(navigator.clipboard) navigator.clipboard.writeText($("adminPub").value).then(function(){ b.textContent = "Copied!"; setTimeout(function(){ b.textContent = "Copy public key"; }, 1500); }, function(){});
+  };
+  RH.fmt = RH.fmt || function(ms){
+    ms = Math.max(0, ms || 0);
+    var cs = Math.floor(ms / 10) % 100, s = Math.floor(ms / 1000) % 60, m = Math.floor(ms / 60000);
+    return m + ":" + (s < 10 ? "0" : "") + s + "." + (cs < 10 ? "0" : "") + cs;
+  };
+})();
+
+(function(){
   var API = "https://en.wikipedia.org/w/api.php";
   var POOL = ["Pizza","Albert Einstein","Moon","Ancient Rome","Association football","Guitar","Volcano","Chocolate","Titanic","Cat","Mount Everest","Electricity","Leonardo da Vinci","Coffee","Jazz","Dinosaur","Great Pyramid of Giza","Japan","Bicycle","Great white shark","Bitcoin","Napoleon","Oxygen","Olympic Games","Vampire","Pacific Ocean","Telescope","William Shakespeare","Hamburger","Sahara","Penguin","Internet","World War II","Basketball","Chess","Rainbow","Sushi","Solar System","Wolfgang Amadeus Mozart","Amazon River","Honey","Tornado","Elephant","Brazil","Vincent van Gogh","Lightning","Bread"];
   var $ = function(id){ return document.getElementById(id); };
-  var RH = window.RH;
+  var RH = window.RH, PROF = RH.profiles, ADMIN = RH.admin;
 
   var MAX_PLAYERS = 8, MAX_PENDING = 4, PENDING_TTL = 60000, JOIN_WAIT = 8000, JOIN_BURST = 8, TOKEN_GAP = 2000;
   var RENAME_GAP = 10000, CHAT_GAP = 700, CHAT_BURST = 6, BEAT = 5000, DEAD = 20000, MSG_BURST = 40, MOUSE_BURST = 30;
@@ -79,7 +454,7 @@
     replaced: "You joined from another tab, so this one was disconnected."
   };
 
-  var from, to, clicks = 0, path = [], acc = 0, last = 0, running = false, raf = 0, busy = false, ended = true;
+  var from, to, clicks = 0, path = [], acc = 0, last = 0, running = false, raf = 0, busy = false, ended = true, recorded = true, scored = true;
   var party = null, watched = false, lastMouse = 0, lastChat = 0, lastRename = 0, joinUntil = 0;
   var spectating = false, specTarget = null, specPage = null, specSeq = 0;
   var inviteCode = "", inviteKey = "";
@@ -113,9 +488,11 @@
     var q = Object.keys(params).map(function(k){ return k + "=" + encodeURIComponent(params[k]); }).join("&");
     return fetch(API + "?" + q + "&format=json&formatversion=2&origin=*").then(function(r){ return r.json(); });
   }
-  function key(){ return "rabbit-hole:" + norm(from) + ">" + norm(to); }
-  function getBest(f, t){ try { var v = store.get("rabbit-hole:" + norm(f) + ">" + norm(t)); return v ? JSON.parse(v) : null; } catch(e){ return null; } }
-  function setBest(o){ store.set(key(), JSON.stringify(o)); }
+  function record(outcome, ms){
+    if(recorded) return { newTime: false, newClicks: false };
+    recorded = true;
+    return PROF.recordRun({ from: from, to: to, outcome: outcome, ms: Math.round(ms), clicks: clicks, party: !!(party && party.joined) });
+  }
   function setErr(m){ $("err").textContent = m || ""; }
   function num(v, lo, hi){ return typeof v === "number" && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : null; }
   function randName(){ return "Player" + (10 + Math.floor(Math.random() * 90)); }
@@ -163,8 +540,8 @@
 
   function updateBest(){
     var f = $("fromIn").value.trim(), t = $("toIn").value.trim();
-    var b = f && t ? getBest(f, t) : null;
-    $("bestLine").textContent = b ? "Your best on this route: " + fmt(b.ms) + " in " + b.clicks + " clicks" : "";
+    var b = f && t ? PROF.bestFor(f, t) : null;
+    $("bestLine").textContent = b ? "Your best on this route: " + fmt(b.ms) + " \u00b7 fewest clicks: " + b.clicks : "";
   }
   $("fromIn").addEventListener("change", updateBest);
   $("toIn").addEventListener("change", updateBest);
@@ -205,11 +582,12 @@
 
   function startRun(){
     stopSpectate(true);
-    clicks = 0; path = []; acc = 0; running = false; busy = false; ended = false;
+    clicks = 0; path = []; acc = 0; running = false; busy = false; ended = false; recorded = false; scored = false;
     $("clicks").textContent = "0"; $("timer").textContent = fmt(0);
     $("goalTitle").textContent = to;
     var tl = $("targetLink"); tl.href = "https://en.wikipedia.org/wiki/" + encodeURIComponent(to.replace(/ /g, "_"));
     $("setup").classList.add("hidden"); $("game").classList.remove("hidden");
+    document.body.classList.add("ingame");
     $("gbar").classList.remove("hidden"); $("targetPanel").classList.remove("hidden");
     $("specBar").classList.add("hidden"); $("specCursor").classList.add("hidden");
     $("win").classList.add("hidden"); $("solve").classList.add("hidden");
@@ -334,9 +712,8 @@
       if(i === path.length - 1) li.className = "goal-hit";
       ol.appendChild(li);
     });
-    var b = getBest(from, to), nb = !b || ms < b.ms;
-    if(nb) setBest({ ms: Math.round(ms), clicks: clicks });
-    $("pb").classList.toggle("hidden", !nb);
+    var res = record("done", ms);
+    $("pb").classList.toggle("hidden", !(res.newTime || res.newClicks));
     $("win").classList.remove("hidden");
     $("againBtn").focus(); renderBoard();
   }
@@ -345,6 +722,7 @@
     stopClock(); cancelAnimationFrame(raf);
     ended = true;
     stopSpectate(true);
+    document.body.classList.remove("ingame");
     $("game").classList.add("hidden"); $("gbar").classList.add("hidden"); $("specBar").classList.add("hidden"); $("targetPanel").classList.add("hidden");
     $("win").classList.add("hidden"); $("solve").classList.add("hidden"); solveToken++; $("setup").classList.remove("hidden");
     path = []; renderLog(); setBarH();
@@ -376,13 +754,8 @@
     $(id).addEventListener("keydown", function(e){ if(e.key === "Enter" && $(id).nextElementSibling.classList.contains("hidden")) begin(); });
   });
 
-  function myName(){
-    var n = RH.cleanName($("partyName").value);
-    if(!n || RH.censor(n) !== n) n = randName();
-    $("partyName").value = n;
-    store.set("rabbit-hole:name", n);
-    return n;
-  }
+  function myName(){ return PROF.current().name; }
+  function paintWho(){ $("whoName").textContent = PROF.current().name + (ADMIN.active() ? " \u2605" : ""); }
   function setPartyMsg(m){ $("partyMsg").textContent = m || ""; }
   function plist(){ return party ? Object.keys(party.players).map(function(k){ return party.players[k]; }) : []; }
   function sendTo(conn, m){ try { if(conn && conn.open) conn.send(m); } catch(e){} }
@@ -397,9 +770,9 @@
     return n;
   }
 
-  function cleanJoinName(n){
+  function cleanJoinName(n, isAdmin){
     var s = RH.cleanName(n);
-    return (!s || RH.censor(s) !== s) ? randName() : s;
+    return (!s || RH.censor(s) !== s || (!isAdmin && RH.reserved(s))) ? randName() : s;
   }
 
   function cleanPlayer(x){
@@ -409,6 +782,8 @@
       name: RH.cleanName(x && x.name) || "Player",
       host: !!(x && x.host),
       ready: !!(x && x.ready),
+      admin: !!(x && x.admin),
+      muted: !!(x && x.muted),
       clicks: Math.max(0, Math.min(9999, (x && x.clicks) | 0)),
       ms: Math.max(0, (x && x.ms) | 0),
       status: st.indexOf(x && x.status) >= 0 ? x.status : "idle",
@@ -439,7 +814,18 @@
     if(l.some(function(x){ return x.status === "racing"; })) return;
     p.state = "lobby";
     l.forEach(function(x){ x.ready = false; });
+    var finishers = l.filter(function(x){ return x.status === "done"; }).sort(function(a, b){ return a.ms - b.ms; });
+    var winner = finishers.length ? finishers[0].id : null;
+    var n = l.filter(function(x){ return !x.admin && x.status !== "idle"; }).length;
+    broadcast({ t: "roundover", winner: winner, n: n });
+    onRoundOver(winner, n);
     hostSys(p, "Round over.");
+  }
+
+  function onRoundOver(winner, n){
+    if(scored || !party || !winner || winner !== party.me || n < 2) return;
+    scored = true;
+    PROF.recordPartyWin();
   }
 
   function sendProg(status){
@@ -459,27 +845,45 @@
     });
   }
 
-  function fillBoard(ol, list){
+  function isMod(){
+    var me = party && party.joined && party.players[party.me];
+    return !!party && party.joined && (party.isHost || !!(me && me.admin));
+  }
+
+  function fillBoard(ol, list, withMod){
     ol.innerHTML = "";
     ranked(list).forEach(function(p){
       var li = document.createElement("li"), n = document.createElement("span"), c = document.createElement("span"), s = document.createElement("span");
-      n.className = "t"; n.textContent = p.name + (p.host ? " (host)" : "") + (party && p.id === party.me ? " (you)" : "");
+      n.className = "t"; n.textContent = (p.admin ? "\u2605 " : "") + p.name + (p.host ? " (host)" : "") + (party && p.id === party.me ? " (you)" : "") + (p.muted ? " (muted)" : "");
       c.className = "ms"; c.textContent = p.clicks + (p.clicks === 1 ? " click" : " clicks");
       s.className = "ms"; s.textContent = p.status === "done" ? "\u2713 " + fmt(p.ms) : (p.status === "gaveup" ? "gave up" : (p.status === "racing" ? "racing" : "waiting"));
       if(p.status === "done") li.className = "goal-hit";
-      li.appendChild(n); li.appendChild(c); li.appendChild(s); ol.appendChild(li);
+      li.appendChild(n); li.appendChild(c); li.appendChild(s);
+      if(withMod && !p.host && !p.admin && party && p.id !== party.me){
+        var mu = document.createElement("button"), rm = document.createElement("button");
+        mu.type = "button"; mu.className = "btn small"; mu.textContent = p.muted ? "Unmute" : "Mute";
+        mu.onclick = function(){ modAction("mute", p.id, !p.muted); };
+        rm.type = "button"; rm.className = "btn small danger"; rm.textContent = "Remove";
+        rm.onclick = function(){ modAction("kick", p.id); };
+        li.appendChild(mu); li.appendChild(rm);
+      }
+      ol.appendChild(li);
     });
   }
 
   function renderBoard(){
     var joined = !!party && party.joined;
+    var meP = joined && party.players[party.me];
+    if(meP && !ended && meP.status === "gaveup" && !$("game").classList.contains("hidden")) giveUp();
     var inGame = joined && !$("game").classList.contains("hidden");
     $("boardPanel").classList.toggle("hidden", !inGame);
     $("standings").classList.toggle("hidden", !joined);
     $("solveStandings").classList.toggle("hidden", !joined);
     if(joined){
       var l = plist();
-      fillBoard($("board"), l); fillBoard($("standingsList"), l); fillBoard($("solveStandingsList"), l);
+      var mod = isMod();
+      fillBoard($("board"), l, mod); fillBoard($("standingsList"), l, mod); fillBoard($("solveStandingsList"), l, mod);
+      $("endRoundBtn2").classList.toggle("hidden", !(mod && party.state === "playing"));
     }
     updateSpecButtons();
     syncSpectate();
@@ -532,6 +936,7 @@
     spectating = true;
     ["win", "solve", "setup", "gbar", "targetPanel"].forEach(function(n){ $(n).classList.add("hidden"); });
     $("game").classList.remove("hidden"); $("specBar").classList.remove("hidden");
+    document.body.classList.add("ingame");
     setBarH();
     watch(t);
     paintSpec();
@@ -606,17 +1011,79 @@
     }
   }
 
-  document.addEventListener("mousemove", function(e){
+  function sendPointer(cx, cy){
     if(!party || !party.joined || !watched || ended || spectating) return;
     var now = performance.now();
     if(now - lastMouse < 80) return;
     lastMouse = now;
     var w = document.querySelector(".artwrap"), r = w.getBoundingClientRect();
     if(!r.width) return;
-    var x = Math.round(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * 1000) / 1000;
-    var y = Math.round(Math.max(0, e.clientY - r.top));
+    var x = Math.round(Math.min(1, Math.max(0, (cx - r.left) / r.width)) * 1000) / 1000;
+    var y = Math.round(Math.max(0, cy - r.top));
     if(party.isHost) forwardMouse(party, party.me, x, y);
     else sendTo(party.hostConn, { t: "mouse", x: x, y: y });
+  }
+
+  function touchPoint(e){
+    var t = e.touches && e.touches[0];
+    if(t) sendPointer(t.clientX, t.clientY);
+  }
+
+  document.addEventListener("mousemove", function(e){ sendPointer(e.clientX, e.clientY); });
+  document.addEventListener("touchstart", touchPoint, { passive: true });
+  document.addEventListener("touchmove", touchPoint, { passive: true });
+
+  var REACTIONS = [["\ud83d\udc4f", "Clap"], ["\ud83d\udd25", "Fire"], ["\ud83d\ude02", "Laugh"], ["\ud83d\ude2e", "Wow"], ["\ud83d\udc80", "Skull"], ["\ud83d\udc40", "Eyes"]];
+  var REACT_GAP = 500, REACT_BURST = 8, lastReact = 0;
+
+  function validReaction(e){
+    return typeof e === "string" && REACTIONS.some(function(r){ return r[0] === e; });
+  }
+
+  function showReaction(e, name){
+    if(!validReaction(e)) return;
+    var layer = $("reactLayer");
+    while(layer.children.length >= 14) layer.removeChild(layer.firstChild);
+    var d = document.createElement("div"), s = document.createElement("small");
+    d.className = "react";
+    d.style.left = (8 + Math.random() * 78) + "%";
+    d.appendChild(document.createTextNode(e));
+    s.textContent = RH.cleanName(name) || "Player";
+    d.appendChild(s);
+    layer.appendChild(d);
+    setTimeout(function(){ if(d.parentNode) d.parentNode.removeChild(d); }, 2600);
+  }
+
+  function hostReact(p, id, e){
+    var pl = p.players[id], meta = p.meta[id], target = p.watch[id];
+    if(!pl || !meta || !target || pl.muted || !validReaction(e)) return;
+    var now = Date.now();
+    meta.react = (meta.react || []).filter(function(x){ return now - x < 10000; });
+    if((meta.react.length && now - meta.react[meta.react.length - 1] < REACT_GAP) || meta.react.length >= REACT_BURST) return;
+    meta.react.push(now);
+    var recipients = {};
+    recipients[target] = 1;
+    Object.keys(p.watch).forEach(function(w){ if(p.watch[w] === target) recipients[w] = 1; });
+    Object.keys(recipients).forEach(function(k){
+      if(k === p.me) showReaction(e, pl.name);
+      else sendTo(p.conns[k], { t: "react", e: e, from: pl.name });
+    });
+  }
+
+  function sendReaction(e){
+    if(!spectating || !party || !party.joined || !validReaction(e)) return;
+    var now = Date.now();
+    if(now - lastReact < REACT_GAP) return;
+    lastReact = now;
+    if(party.isHost) hostReact(party, party.me, e);
+    else sendTo(party.hostConn, { t: "react", e: e });
+  }
+
+  REACTIONS.forEach(function(r){
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "react-btn"; b.textContent = r[0]; b.setAttribute("aria-label", r[1]);
+    b.onclick = function(){ sendReaction(r[0]); };
+    $("reactBar").appendChild(b);
   });
 
   $("specBtn").onclick = function(){ startSpectate(null); };
@@ -624,17 +1091,36 @@
   $("specStop").onclick = function(){ stopSpectate(false); };
   $("specSel").onchange = function(){ if(spectating && this.value && this.value !== specTarget) watch(this.value); };
 
-  function chatAdd(name, text, sys){
+  var chatCollapsed = false, unread = 0;
+  var narrow = window.matchMedia ? window.matchMedia("(max-width: 760px)") : null;
+
+  function paintUnread(){
+    var t = unread > 99 ? "99+" : String(unread);
+    ["chatUnread", "chatJumpCount"].forEach(function(id){
+      $(id).textContent = t;
+      $(id).classList.toggle("hidden", unread < 1);
+    });
+  }
+
+  function setChatCollapsed(v){
+    chatCollapsed = !!v;
+    $("chatPanel").classList.toggle("collapsed", chatCollapsed);
+    $("chatToggle").setAttribute("aria-expanded", String(!chatCollapsed));
+    if(!chatCollapsed){ unread = 0; paintUnread(); }
+  }
+
+  function chatAdd(name, text, sys, isAdmin){
     var ol = $("chatLog"), li = document.createElement("li");
     if(sys){
       li.className = "sys"; li.textContent = text;
     } else {
       var n = document.createElement("span"), t = document.createElement("span");
-      n.className = "cn"; n.textContent = name + ": ";
+      n.className = "cn" + (isAdmin ? " admin" : ""); n.textContent = (isAdmin ? "\u2605 " : "") + name + ": ";
       t.textContent = text;
       li.appendChild(n); li.appendChild(t);
     }
     ol.appendChild(li);
+    if(!sys && chatCollapsed){ unread++; paintUnread(); }
     while(ol.children.length > 60) ol.removeChild(ol.firstChild);
     ol.scrollTop = ol.scrollHeight;
   }
@@ -652,6 +1138,7 @@
   function hostChat(p, id, raw){
     var pl = p.players[id], meta = p.meta[id];
     if(!pl || !meta) return;
+    if(pl.muted){ notify(p, id, "You are muted."); return; }
     var now = Date.now();
     meta.chat = meta.chat.filter(function(x){ return now - x < 10000; });
     if((meta.chat.length && now - meta.chat[meta.chat.length - 1] < CHAT_GAP) || meta.chat.length >= CHAT_BURST){
@@ -662,8 +1149,8 @@
     if(!text) return;
     meta.chat.push(now);
     text = RH.censor(text);
-    broadcast({ t: "chat", name: pl.name, text: text });
-    chatAdd(pl.name, text, false);
+    broadcast({ t: "chat", name: pl.name, text: text, admin: !!pl.admin });
+    chatAdd(pl.name, text, false, pl.admin);
   }
 
   function sendChat(){
@@ -689,29 +1176,15 @@
       return;
     }
     var n = RH.cleanName(raw);
-    if(!n || RH.censor(n) !== n){ notify(p, id, "That name is not allowed."); return; }
+    if(!n || RH.censor(n) !== n || (!pl.admin && RH.reserved(n))){ notify(p, id, "That name is not allowed."); return; }
     var old = pl.name;
     n = uniqueName(p, n, id);
     if(n === old) return;
     meta.lastRename = now;
     pl.name = n;
-    if(id === p.me) store.set("rabbit-hole:name", n);
     hostSys(p, old + " is now " + n);
     pushPlayers();
   }
-
-  $("renameBtn").onclick = function(){
-    if(!party || !party.joined) return;
-    var v = RH.cleanName($("renameIn").value);
-    if(!v) return;
-    var now = Date.now();
-    if(now - lastRename < RENAME_GAP){ chatAdd("", "You can only change your name every " + (RENAME_GAP / 1000) + " seconds.", true); return; }
-    lastRename = now;
-    $("renameIn").value = "";
-    if(party.isHost) handleRename(party, party.me, v);
-    else sendTo(party.hostConn, { t: "rename", name: v });
-  };
-  $("renameIn").addEventListener("keydown", function(e){ if(e.key === "Enter") $("renameBtn").click(); });
 
   function renderLobby(){
     var p = party, host = !!p && p.isHost, inLobby = !!p && p.joined, joining = !!p && !p.joined;
@@ -720,6 +1193,7 @@
     $("joining").classList.toggle("hidden", !joining);
     $("lobby").classList.toggle("hidden", !inLobby);
     $("chatPanel").classList.toggle("hidden", !inLobby);
+    $("chatJump").classList.toggle("hidden", !inLobby);
     $("routeForm").classList.toggle("hidden", guest);
     $("wait").classList.toggle("hidden", !guest);
     $("goBtn").textContent = host ? "Start for everyone" : "Start the clock";
@@ -730,6 +1204,11 @@
     $("pstate").textContent = p.state === "playing" ? "Round in progress" : (p.settings.locked ? "Locked" : "Open");
     $("hostCtl").classList.toggle("hidden", !host);
     $("guestCtl").classList.toggle("hidden", !guest);
+    var meL = p.players[p.me], mod = host || !!(meL && meL.admin);
+    $("adminCtl").classList.toggle("hidden", !(guest && meL && meL.admin));
+    $("adminLock").checked = p.settings.locked;
+    $("endRoundBtn").classList.toggle("hidden", !(mod && p.state === "playing"));
+    $("specLobbyBtn").classList.toggle("hidden", !(canSpectate() && !spectating));
     $("inviteBtn").classList.toggle("hidden", !host);
 
     if(host){
@@ -754,14 +1233,17 @@
     var ol = $("lobbyList"); ol.innerHTML = "";
     l.forEach(function(pl){
       var li = document.createElement("li"), n = document.createElement("span");
-      n.className = "t"; n.textContent = pl.name + (pl.host ? " (host)" : "") + (pl.id === p.me ? " (you)" : "");
+      n.className = "t"; n.textContent = (pl.admin ? "\u2605 " : "") + pl.name + (pl.host ? " (host)" : "") + (pl.id === p.me ? " (you)" : "") + (pl.muted ? " (muted)" : "");
       li.appendChild(n);
-      if(!pl.host){
+      if(!pl.host && !pl.admin){
         var b = document.createElement("span"); b.className = "badge"; b.textContent = pl.ready ? "ready" : "not ready"; li.appendChild(b);
       }
-      if(host && !pl.host){
+      if(mod && !pl.host && !pl.admin && pl.id !== p.me){
+        var mu = document.createElement("button"); mu.type = "button"; mu.className = "btn small"; mu.textContent = pl.muted ? "Unmute" : "Mute";
+        mu.onclick = function(){ modAction("mute", pl.id, !pl.muted); };
+        li.appendChild(mu);
         var k = document.createElement("button"); k.type = "button"; k.className = "btn small danger"; k.textContent = "Remove";
-        k.onclick = function(){ kick(pl.id); };
+        k.onclick = function(){ modAction("kick", pl.id); };
         li.appendChild(k);
       }
       ol.appendChild(li);
@@ -773,7 +1255,7 @@
     }
     var note = $("readyNote");
     if(host){
-      var g = l.filter(function(x){ return !x.host; }), r = g.filter(function(x){ return x.ready; }).length;
+      var g = l.filter(function(x){ return !x.host && !x.admin; }), r = g.filter(function(x){ return x.ready; }).length;
       note.classList.remove("hidden");
       note.textContent = g.length ? r + " of " + g.length + " players ready." : "Waiting for players to join. You can also start solo.";
     } else note.classList.add("hidden");
@@ -796,6 +1278,7 @@
     }
     watched = false;
     $("chatLog").innerHTML = "";
+    unread = 0; paintUnread();
     if(!keepMsg) setPartyMsg("");
     if(!$("game").classList.contains("hidden")) home();
     renderLobby(); renderBoard();
@@ -866,15 +1349,15 @@
     dropPeer(p, id, "denied");
   }
 
-  function admit(p, r, name){
+  function admit(p, r, name, isAdmin){
     var id = r.conn.peer;
     clearTimeout(r.tmo);
     r.joined = true; r.pending = false; r.seen = Date.now();
     p.conns[id] = r.conn;
-    p.players[id] = { id: id, name: uniqueName(p, name, id), host: false, ready: false, clicks: 0, ms: 0, status: "idle", page: "" };
+    p.players[id] = { id: id, name: uniqueName(p, name, id), host: false, ready: false, admin: !!isAdmin, muted: false, clicks: 0, ms: 0, status: isAdmin && p.state === "playing" ? "gaveup" : "idle", page: "" };
     p.meta[id] = { lastRename: 0, chat: [] };
     sendTo(r.conn, { t: "welcome", id: id });
-    hostSys(p, p.players[id].name + " joined.");
+    hostSys(p, p.players[id].name + (isAdmin ? " (admin) joined." : " joined."));
     pushPlayers();
   }
 
@@ -890,7 +1373,7 @@
     admit(p, r, pd.name);
   }
 
-  function handleJoin(p, id, r, m){
+  function handleJoin(p, id, r, m, isAdmin){
     var now = Date.now();
     p.joinLog = p.joinLog.filter(function(x){ return now - x < 10000; });
     if(p.joinLog.length >= JOIN_BURST){ dropPeer(p, id, "busy"); return; }
@@ -898,7 +1381,7 @@
 
     var token = typeof m.token === "string" ? m.token.replace(/[^a-z0-9]/gi, "").slice(0, 24) : "";
     if(!token){ dropPeer(p, id, "busy"); return; }
-    if(p.blocked[token]){ dropPeer(p, id, "kicked"); return; }
+    if(p.blocked[token] && !isAdmin){ dropPeer(p, id, "kicked"); return; }
     var lastTry = p.tokenAt[token] || 0;
     p.tokenAt[token] = now;
     if(now - lastTry < TOKEN_GAP){ dropPeer(p, id, "busy"); return; }
@@ -911,13 +1394,13 @@
     p.tokens[token] = id;
     r.token = token;
 
-    if(p.state !== "lobby"){ dropPeer(p, id, "inround"); return; }
-    if(!wasIn && p.settings.locked){ dropPeer(p, id, "locked"); return; }
-    if(plist().length >= p.settings.max){ dropPeer(p, id, "full"); return; }
+    if(p.state !== "lobby" && !isAdmin){ dropPeer(p, id, "inround"); return; }
+    if(!wasIn && p.settings.locked && !isAdmin){ dropPeer(p, id, "locked"); return; }
+    if(plist().length >= p.settings.max && !isAdmin){ dropPeer(p, id, "full"); return; }
 
-    var name = cleanJoinName(m.name);
+    var name = cleanJoinName(m.name, isAdmin);
     var trusted = typeof m.key === "string" && m.key === p.key;
-    if(p.settings.approve && !trusted && !wasIn){
+    if(p.settings.approve && !trusted && !wasIn && !isAdmin){
       if(Object.keys(p.pending).length >= MAX_PENDING){ dropPeer(p, id, "busy"); return; }
       clearTimeout(r.tmo);
       r.pending = true;
@@ -925,7 +1408,7 @@
       sendTo(r.conn, { t: "pending" });
       chatAdd("", name + " is asking to join.", true);
       renderLobby();
-    } else admit(p, r, name);
+    } else admit(p, r, name, isAdmin);
   }
 
   function hostMessage(p, id, r, m){
@@ -945,7 +1428,31 @@
     r.hits = r.hits.filter(function(h){ return now - h < 5000; });
     if(r.hits.length >= MSG_BURST){ dropPeer(p, id, "busy"); return; }
     r.hits.push(now);
-    if(m.t === "join"){ if(!r.joined && !r.pending) handleJoin(p, id, r, m); return; }
+    if(m.t === "join"){
+      if(r.joined || r.pending || r.joinMsg) return;
+      var ap = typeof m.adminPub === "string" ? m.adminPub.slice(0, 120) : "";
+      if(ap && ADMIN.listed(ap)){
+        r.joinMsg = m; r.adminPub = ap; r.nonce = ADMIN.nonce();
+        sendTo(r.conn, { t: "challenge", nonce: r.nonce });
+        clearTimeout(r.tmo);
+        r.tmo = setTimeout(function(){
+          if(p.raw[id] === r && r.joinMsg){ var jm = r.joinMsg; r.joinMsg = null; r.nonce = null; handleJoin(p, id, r, jm, false); }
+        }, 4000);
+        return;
+      }
+      handleJoin(p, id, r, m, false);
+      return;
+    }
+    if(m.t === "proof"){
+      if(!r.joinMsg || !r.nonce) return;
+      var jm = r.joinMsg, nonce = r.nonce;
+      r.joinMsg = null; r.nonce = null;
+      clearTimeout(r.tmo);
+      ADMIN.verify(r.adminPub, "rabbit-hole-admin|" + p.code + "|" + nonce, m.sig).then(function(good){
+        if(p.raw[id] === r && party === p) handleJoin(p, id, r, jm, !!good);
+      });
+      return;
+    }
     if(m.t === "pong") return;
     if(!r.joined) return;
     var pl = p.players[id];
@@ -972,9 +1479,40 @@
       var tp = p.players[target];
       if(p.state !== "playing" || pl.status === "racing" || pl.status === "idle" || !tp || tp.status !== "racing" || target === id) return;
       setWatch(p, id, target);
+    } else if(m.t === "react"){
+      hostReact(p, id, m.e);
+    } else if(m.t === "admin"){
+      if(pl.admin) adminAction(p, m);
     } else if(m.t === "leave"){
       dropPeer(p, id);
     }
+  }
+
+  function adminAction(p, m){
+    var a = m.action, t = typeof m.target === "string" ? m.target : null;
+    if(a === "kick" || a === "mute"){
+      var tp = t && p.players[t];
+      if(!tp || tp.host || tp.admin) return;
+      if(a === "kick"){ kick(t); return; }
+      tp.muted = !!m.on;
+      hostSys(p, tp.name + (tp.muted ? " was muted." : " was unmuted."));
+      pushPlayers();
+    } else if(a === "lock"){
+      p.settings.locked = !!m.on;
+      pushPlayers();
+    } else if(a === "endround"){
+      if(p.state !== "playing") return;
+      Object.keys(p.players).forEach(function(k){ if(p.players[k].status === "racing") p.players[k].status = "gaveup"; });
+      hostSys(p, "The round was ended by a moderator.");
+      pushPlayers();
+    }
+  }
+
+  function modAction(action, target, on){
+    if(!party || !party.joined) return;
+    var m = { action: action, target: target, on: on };
+    if(party.isHost) adminAction(party, m);
+    else sendTo(party.hostConn, { t: "admin", action: action, target: target, on: on });
   }
 
   function hostConnection(p, conn){
@@ -1029,7 +1567,7 @@
     peer.on("open", function(id){
       if(party !== p) return;
       p.me = id;
-      p.players[id] = { id: id, name: name, host: true, ready: true, clicks: 0, ms: 0, status: "idle", page: "" };
+      p.players[id] = { id: id, name: name, host: true, ready: true, admin: ADMIN.active(), muted: false, clicks: 0, ms: 0, status: "idle", page: "" };
       p.meta[id] = { lastRename: 0, chat: [] };
       p.timer = setInterval(function(){ hostBeat(p); }, BEAT);
       setPartyMsg("");
@@ -1056,6 +1594,13 @@
     p.lastHost = Date.now();
     if(m.t === "ping"){ sendTo(p.hostConn, { t: "pong" }); return; }
     if(m.t === "pending"){ p.pending = true; renderLobby(); return; }
+    if(m.t === "challenge"){
+      if(typeof m.nonce !== "string" || m.nonce.length > 60 || !ADMIN.active()) return;
+      ADMIN.sign("rabbit-hole-admin|" + p.code + "|" + m.nonce).then(function(sig){
+        if(party === p) sendTo(p.hostConn, { t: "proof", sig: sig });
+      }).catch(function(){});
+      return;
+    }
     if(m.t === "welcome"){
       p.joined = true; p.pending = false;
       $("chatLog").innerHTML = "";
@@ -1083,10 +1628,14 @@
       var text = RH.censor(RH.cleanText(m.text, 140));
       if(!text) return;
       if(m.sys) chatAdd("", text, true);
-      else chatAdd(RH.cleanName(m.name) || "Player", text, false);
+      else chatAdd(RH.cleanName(m.name) || "Player", text, false, !!m.admin);
     } else if(m.t === "notice"){
       var nt = RH.cleanText(m.text, 140);
       if(nt) chatAdd("", nt, true);
+    } else if(m.t === "react"){
+      showReaction(m.e, m.from);
+    } else if(m.t === "roundover"){
+      onRoundOver(typeof m.winner === "string" ? m.winner : null, m.n | 0);
     } else if(m.t === "watch"){
       watched = !!m.on;
     } else if(m.t === "mouse"){
@@ -1120,7 +1669,7 @@
         if(party !== p) return;
         opened = true; clearTimeout(tmo);
         p.lastHost = Date.now();
-        conn.send({ t: "join", name: name, key: k, token: TOKEN });
+        conn.send({ t: "join", name: name, key: k, token: TOKEN, adminPub: ADMIN.active() ? ADMIN.pub() : "" });
         p.timer = setInterval(function(){
           if(party !== p) return;
           if(Date.now() - p.lastHost > DEAD){ setPartyMsg("Lost connection to the host."); leaveParty(true); }
@@ -1271,6 +1820,7 @@
     ended = true;
     stopClock(); cancelAnimationFrame(raf); busy = true;
     sendProg("gaveup");
+    record("gaveup", elapsed());
     showSolve();
     renderBoard();
   }
@@ -1304,8 +1854,29 @@
   $("solveBack").onclick = home;
   renderLobby();
 
-  var savedName = store.get("rabbit-hole:name");
-  if(savedName && RH.okName(savedName)) $("partyName").value = savedName;
+  paintWho();
+  setChatCollapsed(!!(narrow && narrow.matches));
+  $("chatToggle").onclick = function(){ setChatCollapsed(!chatCollapsed); };
+  $("chatJump").onclick = function(){
+    setChatCollapsed(false);
+    var panel = $("chatPanel");
+    if(panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+  window.addEventListener("resize", setBarH);
+  if(/^https?:$/.test(location.protocol)) store.set("rabbit-hole:home", location.pathname.replace(/[^\/]*$/, ""));
+  PROF.busy = function(){ return !!party; };
+  PROF.onChange(function(kind){
+    paintWho(); updateBest();
+    if(kind !== "name" || !party || !party.joined) return;
+    var n = PROF.current().name;
+    if(party.isHost) handleRename(party, party.me, n);
+    else sendTo(party.hostConn, { t: "rename", name: n });
+  });
+  $("whoEdit").onclick = PROF.open;
+  $("specLobbyBtn").onclick = function(){ startSpectate(null); };
+  $("endRoundBtn").onclick = function(){ modAction("endround"); };
+  $("endRoundBtn2").onclick = function(){ modAction("endround"); };
+  $("adminLock").onchange = function(){ modAction("lock", null, this.checked); };
 
   var qs = new URLSearchParams(location.search);
   if(qs.get("from") && qs.get("to")){ $("fromIn").value = qs.get("from"); $("toIn").value = qs.get("to"); updateBest(); }
@@ -1317,7 +1888,7 @@
     $("joinCode").value = pc;
     qs.delete("party"); qs.delete("key");
     try { history.replaceState(null, "", location.pathname + (qs.toString() ? "?" + qs.toString() : "")); } catch(e){}
-    $("partyName").focus();
+    $("joinBtn").focus();
   }
 })();
 
@@ -1374,14 +1945,15 @@
       title: "Pick your route",
       body: [
         "Type any article name and choose a suggestion, or press Random route.",
-        "Your best time on each route is saved in this browser. After a run you can copy a challenge link so a friend plays the exact same route."
+        "Press your username in the top bar to set it and see your stats. Your best times are saved per profile in this browser.",
+        "After a run you can copy a challenge link so a friend plays the exact same route."
       ]
     },
     {
       title: "Race your friends",
       body: [
         "Create a party and share the invite link. People who type only the code need the host to approve them, and the host can lock the party or remove players.",
-        "Once you finish a round you can spectate anyone who is still racing and watch their mouse move.",
+        "Once you finish a round you can spectate anyone who is still racing and watch their mouse move. Spectators can also send emoji reactions that float up on that player's screen.",
         "Use the party chat on the left. It is plain text only and bad words are censored."
       ]
     }
